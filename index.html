@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Comprovantes</title>
+<meta name="description" content="Lê comprovantes de pagamento em foto ou PDF e soma o total do mês.">
+<meta name="theme-color" content="#1A2130">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* App de uma coluna para celular: mês, total em destaque, botão de adicionar, lista por dia */
+:root{
+  --bg:#EEF0F3; --surface:#FFFFFF; --ink:#1A2130; --muted:#5D6677; --line:#D9DDE4;
+  --brass:#9A6B1F; --brass-soft:#F3E7D1; --on-brass:#FFFFFF; --ok:#2F7A4F; --warn:#A35A12; --bad:#B23A3A;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#11141A; --surface:#1A1F28; --ink:#E9ECF1; --muted:#9AA3B2; --line:#2B3240;
+  --brass:#D7A957; --brass-soft:#3A2F1B; --on-brass:#1A1408; --ok:#6CC08F; --warn:#E4A15A; --bad:#EE8080; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;
+  padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px));
+  padding-block:calc(14px + env(safe-area-inset-top,0px)) calc(110px + env(safe-area-inset-bottom,0px))}
+.wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible,.pick:focus-within{outline:2px solid var(--brass);outline-offset:2px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{font-family:var(--display);font-weight:700;font-size:1.15rem;letter-spacing:-.01em}
+.brand small{display:block;font-family:var(--body);font-weight:400;font-size:.78rem;color:var(--muted);letter-spacing:0}
+.hbtns{display:flex;gap:8px}
+.iconbtn{background:none;border:1px solid var(--line);border-radius:10px;height:38px;min-width:38px;padding:0 10px;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:.85rem;font-weight:600}
+.iconbtn:hover{color:var(--ink);border-color:var(--muted)}
+.iconbtn svg{width:18px;height:18px}
+
+.month{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.month h2{margin:0;font-family:var(--display);font-weight:500;font-size:1.05rem;text-align:center;flex:1}
+
+.total{background:var(--ink);color:var(--bg);border-radius:18px;padding:20px 20px 18px;display:flex;flex-direction:column;gap:6px}
+.total .lbl{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;opacity:.7}
+.total .big{font-family:var(--display);font-weight:700;font-size:clamp(2rem,9vw,2.7rem);line-height:1.05;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.total .big .cur{font-size:.5em;font-weight:500;opacity:.75;margin-right:4px;vertical-align:.45em}
+.total .meta{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.85rem;opacity:.8}
+.total .bump{color:var(--brass)}
+@media (prefers-reduced-motion:no-preference){.total .big{transition:color .4s}.total.flash .big{color:var(--brass)}}
+
+.pick{position:relative;overflow:hidden}
+.pick input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:200px;z-index:2}
+.busy{opacity:.55;pointer-events:none}
+.topadd{display:flex;align-items:center;gap:14px;padding:14px 16px;border:1.5px dashed var(--brass);border-radius:14px;background:color-mix(in srgb, var(--brass-soft) 55%, var(--surface));cursor:pointer}
+.topadd .plus{flex-shrink:0;width:42px;height:42px;border-radius:11px;background:var(--brass);color:var(--on-brass);display:flex;align-items:center;justify-content:center}
+.topadd .plus svg{width:22px;height:22px}
+.topadd strong{display:block;font-weight:600}
+.topadd small{display:block;color:var(--muted);font-size:.84rem}
+.mode{font-size:.8rem;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block}
+.dot.on{background:var(--ok)}
+.linkbtn{background:none;border:0;padding:0;color:var(--brass);font-weight:600;text-decoration:underline;text-underline-offset:2px}
+
+.notice{border:1px dashed var(--line);border-radius:12px;padding:12px 14px;color:var(--muted);font-size:.9rem}
+.notice.err{border-style:solid;border-color:var(--bad);color:var(--bad)}
+
+.progress{display:flex;flex-direction:column;gap:6px}
+.pitem{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 10px;font-size:.88rem;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 12px}
+.pitem span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.pitem .st{color:var(--muted);flex-shrink:0}
+.pitem .st.bad{color:var(--bad)}
+.pmsg{flex-basis:100%;color:var(--bad);font-size:.82rem;line-height:1.35}
+
+.day{display:flex;flex-direction:column;gap:6px}
+.day h3{margin:0;font-size:.74rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between}
+.list{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.row{display:flex;align-items:stretch;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.rowmain{flex:1;min-width:0;display:grid;grid-template-columns:1fr auto;gap:2px 12px;padding:12px 6px 12px 14px;border:0;background:none;text-align:left}
+.rowmain:hover{background:color-mix(in srgb, var(--brass-soft) 45%, transparent)}
+.row .who{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .val{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:500;text-align:right}
+.row .acct{grid-column:1 / -1;font-family:var(--mono);font-size:.8rem;color:var(--muted);min-width:0;overflow-wrap:anywhere}
+.row .note{grid-column:1 / -1;font-size:.86rem;color:var(--brass);font-weight:500;min-width:0;overflow-wrap:anywhere}
+.late{font-family:var(--body);color:var(--warn);font-weight:600}
+.tag{display:inline-block;font-family:var(--body);font-size:.68rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:5px;background:var(--brass-soft);color:var(--brass);margin-right:6px}
+.del{flex-shrink:0;width:52px;border:0;border-left:1px solid var(--line);background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:.78rem;font-weight:600;transition:width .15s}
+.del svg{width:18px;height:18px}
+.del:hover{color:var(--bad)}
+.del.armed{width:96px;background:var(--bad);color:#fff}
+
+.empty{text-align:center;padding:30px 16px;color:var(--muted)}
+.empty strong{display:block;color:var(--ink);font-family:var(--display);font-weight:500;font-size:1.1rem;margin-bottom:4px}
+
+.dock{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;gap:10px;z-index:5;
+  padding:12px max(16px, env(safe-area-inset-right,0px)) calc(14px + env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-left,0px));
+  background:linear-gradient(to top, var(--bg) 70%, transparent)}
+.dockin{display:flex;gap:10px;width:100%;max-width:560px}
+.add{flex:1;display:flex;align-items:center;justify-content:center;gap:10px;height:54px;border:0;border-radius:14px;background:var(--brass);color:var(--on-brass);font-weight:600;font-size:1rem;box-shadow:0 6px 18px -8px var(--brass);cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.add svg{width:20px;height:20px}
+.add2{flex-shrink:0;height:54px;padding:0 16px;border-radius:14px;border:1px solid var(--line);background:var(--surface);font-weight:600}
+
+/* folha inferior */
+.scrim{position:fixed;inset:0;background:rgba(10,12,16,.45);display:flex;align-items:flex-end;justify-content:center;z-index:20}
+.sheet{background:var(--bg);width:100%;max-width:600px;max-height:92%;overflow:auto;border-radius:18px 18px 0 0;
+  padding:18px max(16px, env(safe-area-inset-right,0px)) calc(18px + env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:14px}
+.sheet h2{margin:0;font-family:var(--display);font-weight:600;font-size:1.2rem}
+.sheet .sub{margin:-8px 0 0;color:var(--muted);font-size:.88rem}
+.sheet p{margin:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.card h3{margin:0;font-size:.95rem}
+.card .head{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.8rem;color:var(--muted)}
+.card .head span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card.skip{opacity:.5}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.full{grid-column:1 / -1}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);min-width:0}
+label.f input,label.f textarea{font:inherit;font-size:16px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 10px;width:100%;min-width:0}
+label.f textarea{resize:vertical}
+label.f input.mono{font-family:var(--mono)}
+.chk{display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--ink);flex-shrink:0}
+.dup{font-size:.82rem;color:var(--warn);background:color-mix(in srgb, var(--warn) 12%, transparent);border-radius:8px;padding:6px 9px}
+.low{font-size:.82rem;color:var(--muted)}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+.btn{flex:1;min-width:120px;min-height:46px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-weight:600;padding:0 12px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink)}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.danger{color:var(--bad);border-color:color-mix(in srgb, var(--bad) 45%, var(--line))}
+.btn.danger.armed{background:var(--bad);color:#fff;border-color:var(--bad)}
+.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;font-size:.9rem}
+.small{font-size:.82rem;color:var(--muted)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:.9rem;z-index:30;max-width:calc(100% - 32px)}
+@media (max-width:380px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">Comprovantes<small>Pagamentos lidos de fotos e PDFs</small></div>
+    <div class="hbtns">
+      <button class="iconbtn" id="btnInstall" hidden>Instalar</button>
+      <button class="iconbtn" id="btnSettings" aria-label="Configurações e backup">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="month">
+    <button class="iconbtn" id="prev" aria-label="Mês anterior">‹</button>
+    <h2 id="monthLabel">—</h2>
+    <button class="iconbtn" id="next" aria-label="Próximo mês">›</button>
+  </div>
+
+  <section class="total" id="totalCard" aria-live="polite">
+    <span class="lbl">Total pago no mês</span>
+    <span class="big"><span class="cur">R$</span><span id="totalVal">0,00</span></span>
+    <div class="meta"><span id="count">0 comprovantes</span><span id="bump" class="bump"></span></div>
+  </section>
+
+  <label class="topadd pick" id="topAdd">
+    <span class="plus" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+    <span><strong>Adicionar comprovante</strong><small>Foto, print ou PDF, um ou vários</small></span>
+    <input type="file" id="file2" accept="image/*,application/pdf" multiple aria-label="Adicionar comprovante">
+  </label>
+  <div class="mode" id="mode"></div>
+
+  <div id="status"></div>
+  <div class="progress" id="progress"></div>
+  <div id="days"></div>
+</div>
+
+<div class="dock"><div class="dockin">
+  <label class="add pick" id="btnAdd">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+    <span id="addLabel">Adicionar comprovante</span>
+    <input type="file" id="file" accept="image/*,application/pdf" multiple aria-label="Adicionar comprovante">
+  </label>
+  <button class="add2" id="btnManual">À mão</button>
+</div></div>
+
+<div class="scrim" id="scrim" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast" hidden></div>
+<datalist id="tipos"><option>Pix</option><option>TED</option><option>DOC</option><option>Boleto</option><option>Transferência</option><option>Cartão</option></datalist>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="parser.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const BRL = new Intl.NumberFormat('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmt = v => BRL.format(Number(v)||0);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const todayISO = () => { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+const monthOf = iso => (iso||'').slice(0,7);
+const brDate = iso => iso ? iso.split('-').reverse().join('/') : '';
+const norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+function parseValor(v){
+  if (typeof v === 'number') return Math.round(v*100)/100;
+  let s = String(v||'').replace(/[^\d,.-]/g,'');
+  if (s.includes(',')) s = s.replace(/\./g,'').replace(',','.');
+  const n = parseFloat(s); return isFinite(n) ? Math.round(n*100)/100 : 0;
+}
+function contaTexto(c){
+  const p = [];
+  if (c.banco) p.push(c.banco);
+  if (c.agencia) p.push('Ag '+c.agencia);
+  if (c.conta) p.push('CC '+c.conta);
+  if (c.chavePix) p.push('Pix '+c.chavePix);
+  return p.join(' · ') || 'Conta não identificada';
+}
+const blank = name => ({favorecido:'',documento:'',banco:'',agencia:'',conta:'',chavePix:'',data:todayISO(),vencimento:'',valor:0,tipo:'',pagador:'',idTransacao:'',comentario:'',confianca:'manual',arquivo:name});
+
+/* ---------- armazenamento no aparelho ---------- */
+const KEY='cc:comprovantes', CFG='cc:config';
+function load(k, d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
+function store(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); return true; }catch(e){ toast('Não foi possível salvar no aparelho (memória cheia?).'); return false; } }
+let all = load(KEY, []);
+let cfg = Object.assign({geminiKey:'', model:'gemini-flash-latest'}, load(CFG, {}));
+const saveAll = () => store(KEY, all);
+const saveCfg = () => store(CFG, cfg);
+if (navigator.storage?.persist) navigator.storage.persist().catch(()=>{});
+
+let cur = monthOf(todayISO());
+let lastTotal = null;
+
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,3000); }
+function setStatus(html, err){ $('#status').innerHTML = html ? `<div class="notice${err?' err':''}">${html}</div>` : ''; }
+function renderMode(){
+  $('#mode').innerHTML = cfg.geminiKey
+    ? `<span class="dot on"></span> Leitura inteligente ativa (Gemini)`
+    : `<span class="dot"></span> Leitura básica no aparelho. <button class="linkbtn" id="goSettings">Ativar leitura inteligente grátis</button>`;
+  const g=$('#goSettings'); if (g) g.onclick=openSettings;
+}
+
+function shiftMonth(d){ const [y,m]=cur.split('-').map(Number); const dt=new Date(y,m-1+d,1); cur=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0'); lastTotal=null; render(); }
+$('#prev').onclick=()=>shiftMonth(-1);
+$('#next').onclick=()=>shiftMonth(1);
+
+function render(){
+  const [y,m]=cur.split('-').map(Number);
+  const ml = new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  $('#monthLabel').textContent = ml.charAt(0).toUpperCase()+ml.slice(1);
+  const items = all.filter(c=>c.mes===cur).sort((a,b)=> (b.data||'').localeCompare(a.data||'') || (b.criadoEm||0)-(a.criadoEm||0));
+  const total = Math.round(items.reduce((s,c)=>s+(Number(c.valor)||0),0)*100)/100;
+  $('#totalVal').textContent = fmt(total);
+  $('#count').textContent = items.length + (items.length===1?' comprovante':' comprovantes');
+  if (lastTotal!==null && total>lastTotal){
+    $('#bump').textContent = '+ R$ '+fmt(total-lastTotal)+' agora';
+    const tc=$('#totalCard'); tc.classList.add('flash'); setTimeout(()=>tc.classList.remove('flash'),900);
+  } else if (lastTotal!==null && total!==lastTotal) $('#bump').textContent='';
+  lastTotal = total;
+
+  const box = $('#days');
+  if (!items.length){
+    box.innerHTML = `<div class="empty"><strong>Nenhum comprovante neste mês</strong>Toque em “Adicionar comprovante” e escolha fotos, prints ou PDFs. Favorecido, data, vencimento, conta e valor aparecem aqui e o total soma sozinho.</div>`;
+    return;
+  }
+  const byDay = {};
+  items.forEach(c=>{ (byDay[c.data||'']=byDay[c.data||'']||[]).push(c); });
+  box.innerHTML = Object.keys(byDay).map(d=>{
+    const list=byDay[d]; const sub=list.reduce((s,c)=>s+(Number(c.valor)||0),0);
+    const label = d ? new Date(d+'T12:00').toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit'}) : 'Sem data';
+    return `<div class="day"><h3><span>${esc(label)}</span><span class="num">R$ ${fmt(sub)}</span></h3><div class="list">${
+      list.map(c=>`<div class="row" data-id="${esc(c.id)}"><button class="rowmain"><span class="who">${c.tipo?`<span class="tag">${esc(c.tipo)}</span>`:''}${esc(c.favorecido||'Favorecido não identificado')}</span><span class="val">R$ ${fmt(c.valor)}</span><span class="acct">${esc(contaTexto(c))}${c.vencimento?` · Venc. ${esc(brDate(c.vencimento))}${c.data && c.data>c.vencimento?' <span class="late">pago após o vencimento</span>':''}`:''}</span>${c.comentario?`<span class="note">${esc(c.comentario)}</span>`:''}</button><button class="del" aria-label="Excluir comprovante" title="Excluir comprovante"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button></div>`).join('')
+    }</div></div>`;
+  }).join('');
+  box.querySelectorAll('.row').forEach(r=>{
+    const id=r.dataset.id;
+    r.querySelector('.rowmain').onclick=()=>openEdit(all.find(c=>c.id===id));
+    const del=r.querySelector('.del');
+    del.onclick=()=>{
+      if (!del.classList.contains('armed')){
+        del.classList.add('armed'); del.textContent='Excluir?';
+        setTimeout(()=>{ if (del.isConnected && del.classList.contains('armed')) render(); },4000);
+        return;
+      }
+      removeItem(id);
+    };
+  });
+}
+function removeItem(id){
+  const c=all.find(x=>x.id===id); if (!c) return;
+  all=all.filter(x=>x.id!==id); saveAll(); render();
+  toast(`Excluído: ${c.favorecido||'comprovante'} (− R$ ${fmt(c.valor)})`);
+}
+
+/* ---------- leitura ---------- */
+const PROMPT = `Você lê comprovantes de pagamento brasileiros (Pix, TED, DOC, transferência, boleto, cartão).
+Extraia CADA pagamento presente (normalmente um só).
+Responda somente com JSON neste formato:
+{"comprovantes":[{"favorecido":"nome de quem recebeu","documento":"CPF/CNPJ do favorecido como aparece, ou null","banco":"banco/instituição de destino ou null","agencia":"agência de destino ou null","conta":"conta de destino ou null","chavePix":"chave Pix de destino ou null","data":"AAAA-MM-DD","vencimento":"AAAA-MM-DD ou null","valor":1234.56,"tipo":"Pix|TED|DOC|Boleto|Transferência|Cartão|Outro","pagador":"nome de quem pagou ou null","idTransacao":"ID/autenticação ou null","confianca":"alta|media|baixa"}]}
+Regras: valor em reais como número com ponto decimal (o valor efetivamente pago). data é a data em que o pagamento foi efetuado. vencimento é a data de vencimento da conta ou boleto, se aparecer (não confunda com a data do pagamento). Em boleto, o favorecido é o beneficiário/cedente. Não invente nada: use null para o que não estiver legível e marque confianca "baixa" se houver dúvida. Se não for um comprovante de pagamento, devolva {"comprovantes":[]}.`;
+
+function mapOut(out, name){
+  const arr = Array.isArray(out?.comprovantes) ? out.comprovantes : (Array.isArray(out) ? out : (out && typeof out==='object' && 'valor' in out ? [out] : []));
+  const okDate = d => /^\d{4}-\d{2}-\d{2}$/.test(d||'') ? d : '';
+  return arr.map(c=>({
+    favorecido: c.favorecido || '', documento: c.documento || '', banco: c.banco || '', agencia: c.agencia || '',
+    conta: c.conta || '', chavePix: c.chavePix || '', data: okDate(c.data), vencimento: okDate(c.vencimento),
+    valor: parseValor(c.valor), tipo: c.tipo || '', pagador: c.pagador || '', idTransacao: c.idTransacao || '',
+    comentario: '', confianca: c.confianca || 'media', arquivo: name
+  }));
+}
+
+function blobToBase64(blob){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]); r.onerror=rej; r.readAsDataURL(blob); }); }
+async function toJpeg(file, max=2000){
+  try{
+    const url=URL.createObjectURL(file);
+    const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=url;});
+    const s=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+    const cv=document.createElement('canvas');cv.width=Math.max(1,Math.round(img.naturalWidth*s));cv.height=Math.max(1,Math.round(img.naturalHeight*s));
+    const ctx=cv.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,cv.width,cv.height);ctx.drawImage(img,0,0,cv.width,cv.height);
+    URL.revokeObjectURL(url);
+    return await new Promise(r=>cv.toBlob(b=>r(b||file),'image/jpeg',0.9));
+  }catch(e){ return file; }
+}
+
+async function gemini(parts){
+  const model = (cfg.model||'gemini-flash-latest').trim();
+  let res;
+  try{
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      method:'POST', headers:{'Content-Type':'application/json','x-goog-api-key':cfg.geminiKey.trim()},
+      body: JSON.stringify({contents:[{role:'user',parts}], generationConfig:{responseMimeType:'application/json', temperature:0}})
+    });
+  }catch(e){ throw new Error('Sem conexão com a internet.'); }
+  if (!res.ok){
+    let msg=''; try{ msg=(await res.json())?.error?.message||''; }catch(e){}
+    if (res.status===400 && /api key/i.test(msg)) throw new Error('Chave do Gemini inválida. Confira em Configurações.');
+    if (res.status===403) throw new Error('Chave do Gemini sem permissão. Gere uma nova em Configurações.');
+    if (res.status===404) throw new Error('Modelo do Gemini não encontrado. Em Configurações, use "gemini-flash-latest".');
+    if (res.status===429) throw new Error('Limite gratuito do Gemini atingido por agora. Tente mais tarde.');
+    throw new Error('Gemini respondeu com erro '+res.status+'.');
+  }
+  const j = await res.json();
+  const txt = (j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');
+  try{ return JSON.parse(txt); }
+  catch(e){ const m = txt.match(/[\[{][\s\S]*[\]}]/); if (m) return JSON.parse(m[0]); throw new Error('Não entendi a resposta da leitura.'); }
+}
+
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+async function pdfText(file){
+  if (!window.pdfjsLib) throw new Error('Leitor de PDF não carregou. Confira a internet.');
+  const pdf = await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer()), isEvalSupported:false}).promise;
+  let text=''; const pages=[];
+  for (let i=1;i<=Math.min(pdf.numPages,6);i++){
+    const page=await pdf.getPage(i); pages.push(page);
+    const tc=await page.getTextContent();
+    text += tc.items.map(t=>t.str+(t.hasEOL?'\n':' ')).join('') + '\n';
+  }
+  return {text, pages};
+}
+async function renderPage(page){
+  const vp=page.getViewport({scale:2});
+  const cv=document.createElement('canvas'); cv.width=vp.width; cv.height=vp.height;
+  const ctx=cv.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,cv.width,cv.height);
+  await page.render({canvasContext:ctx, viewport:vp}).promise;
+  return new Promise(r=>cv.toBlob(r,'image/jpeg',0.9));
+}
+
+let ocrWorker=null;
+async function ocr(blob, onStep){
+  if (!window.Tesseract){
+    onStep?.('baixando leitor…');
+    await new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'; s.onload=res; s.onerror=()=>rej(new Error('Não consegui baixar o leitor de imagens. Confira a internet.')); document.head.appendChild(s); });
+  }
+  if (!ocrWorker){ onStep?.('preparando leitor…'); ocrWorker = await Tesseract.createWorker('por'); }
+  onStep?.('lendo imagem…');
+  const {data} = await ocrWorker.recognize(blob);
+  return data.text||'';
+}
+
+async function readFile(file, onStep){
+  const isPdf = file.type==='application/pdf' || /\.pdf$/i.test(file.name);
+  if (cfg.geminiKey){
+    onStep?.('lendo…');
+    try{
+      let part;
+      if (isPdf) part = {inline_data:{mime_type:'application/pdf', data: await blobToBase64(file)}};
+      else { const j = await toJpeg(file); part = {inline_data:{mime_type:j.type||'image/jpeg', data: await blobToBase64(j)}}; }
+      return {items: mapOut(await gemini([{text:PROMPT}, part]), file.name)};
+    }catch(e){
+      if (!/internet|conex/i.test(e.message)) { const r = await readBasic(file, isPdf, onStep); r.warn = e.message+' Usei a leitura básica.'; return r; }
+      throw e;
+    }
+  }
+  return readBasic(file, isPdf, onStep);
+}
+async function readBasic(file, isPdf, onStep){
+  let text='';
+  if (isPdf){
+    onStep?.('lendo PDF…');
+    const r = await pdfText(file); text = r.text;
+    if (text.replace(/\s/g,'').length < 40){ for (const p of r.pages.slice(0,2)) text += '\n' + await ocr(await renderPage(p), onStep); }
+  } else {
+    text = await ocr(await toJpeg(file, 2400), onStep);
+  }
+  const c = ComprovanteParser.parse(text);
+  if (!c.valor && !c.favorecido) return {items:[]};
+  return {items:[{...c, comentario:'', arquivo:file.name}]};
+}
+async function readText(t){
+  if (cfg.geminiKey){
+    try{ return mapOut(await gemini([{text: PROMPT + '\n\nTexto do comprovante:\n' + t.slice(0,20000)}]), 'texto colado'); }catch(e){ toast(e.message+' Usei a leitura básica.'); }
+  }
+  const c = ComprovanteParser.parse(t);
+  return (c.valor || c.favorecido) ? [{...c, comentario:'', arquivo:'texto colado'}] : [];
+}
+
+['#file','#file2'].forEach(s=>{ $(s).onchange = ev => { const f=[...ev.target.files]; ev.target.value=''; handleFiles(f); }; });
+$('#btnManual').onclick = () => openReview([blank('lançamento manual')]);
+
+async function handleFiles(files){
+  if (!files.length) return;
+  const busy = on => { $('#btnAdd').classList.toggle('busy',on); $('#topAdd').classList.toggle('busy',on); $('#addLabel').textContent = on?'Lendo comprovantes…':'Adicionar comprovante'; };
+  busy(true); setStatus('');
+  const prog=$('#progress');
+  prog.innerHTML = files.map((f,i)=>`<div class="pitem"><span>${esc(f.name||'arquivo')}</span><span class="st" id="st${i}">na fila</span></div>`).join('');
+  const addMsg=(i,m)=>{ const d=document.createElement('div'); d.className='pmsg'; d.textContent=m; $('#st'+i).parentNode.appendChild(d); };
+  const found=[]; let errs=0;
+  for (let i=0;i<files.length;i++){
+    const st=$('#st'+i), f=files[i];
+    try{
+      const r = await readFile(f, s=>{ st.textContent=s; });
+      if (r.warn) addMsg(i, r.warn);
+      if (r.items.length){ found.push(...r.items); st.textContent = r.items.length===1?'1 pagamento':r.items.length+' pagamentos'; }
+      else { errs++; found.push(blank(f.name)); st.textContent='não reconhecido'; st.classList.add('bad'); addMsg(i,'Não encontrei um pagamento neste arquivo. Abri para você preencher à mão.'); }
+    }catch(e){
+      errs++; st.textContent='não lido'; st.classList.add('bad');
+      addMsg(i, (e?.message||'Falha na leitura.')+' Abri para você preencher à mão.');
+      found.push(blank(f.name));
+    }
+  }
+  busy(false);
+  if (!errs) setTimeout(()=>{ prog.innerHTML=''; }, 600);
+  if (found.length) openReview(found);
+}
+
+/* ---------- conferir / editar ---------- */
+function isDup(c, ignoreId){
+  return all.find(o=> o.id!==ignoreId && (
+    (c.idTransacao && o.idTransacao && norm(c.idTransacao)===norm(o.idTransacao)) ||
+    (c.valor>0 && Math.abs((o.valor||0)-(c.valor||0))<0.005 && o.data===c.data && norm(o.favorecido)===norm(c.favorecido))));
+}
+function fieldsHTML(c, k){
+  return `<div class="grid">
+    <label class="f full">Favorecido<input id="fav${k}" value="${esc(c.favorecido)}" autocomplete="off"></label>
+    <label class="f full">Comentário (para onde vai o pagamento)<input id="com${k}" value="${esc(c.comentario||'')}" placeholder="Ex.: aluguel, fornecedor, embalagens"></label>
+    <label class="f">Valor (R$)<input id="val${k}" class="mono" inputmode="decimal" value="${esc(fmt(c.valor))}"></label>
+    <label class="f">Data do pagamento<input id="dat${k}" type="date" value="${esc(c.data||todayISO())}"></label>
+    <label class="f">Vencimento<input id="ven${k}" type="date" value="${esc(c.vencimento||'')}"></label>
+    <label class="f">Tipo<input id="tip${k}" value="${esc(c.tipo)}" list="tipos"></label>
+    <label class="f full">Banco destino<input id="ban${k}" value="${esc(c.banco)}"></label>
+    <label class="f">Agência<input id="age${k}" class="mono" value="${esc(c.agencia)}"></label>
+    <label class="f">Conta<input id="con${k}" class="mono" value="${esc(c.conta)}"></label>
+    <label class="f full">Chave Pix<input id="pix${k}" class="mono" value="${esc(c.chavePix)}"></label>
+    <label class="f">CPF/CNPJ favorecido<input id="doc${k}" class="mono" value="${esc(c.documento)}"></label>
+    <label class="f">ID da transação<input id="idt${k}" class="mono" value="${esc(c.idTransacao)}"></label>
+  </div>`;
+}
+function readFields(k, base){
+  const g=id=>($('#'+id+k)?.value||'').trim();
+  const data = g('dat') || todayISO();
+  return {...base, favorecido:g('fav'), comentario:g('com'), valor:parseValor(g('val')), data, mes:monthOf(data), vencimento:g('ven'),
+    banco:g('ban'), tipo:g('tip'), agencia:g('age'), conta:g('con'), chavePix:g('pix'), documento:g('doc'), idTransacao:g('idt')};
+}
+function openSheet(html){ $('#sheet').innerHTML = html; $('#scrim').hidden=false; $('#sheet').scrollTop=0; }
+function closeSheet(){ $('#scrim').hidden=true; $('#sheet').innerHTML=''; }
+$('#scrim').addEventListener('click', e=>{ if (e.target.id==='scrim') closeSheet(); });
+
+function openReview(list){
+  const single = list.length===1 && list[0].confianca==='manual';
+  openSheet(`<h2>${single?'Lançar pagamento':'Conferir '+(list.length===1?'pagamento':list.length+' pagamentos')}</h2>
+    <p class="sub">${single?'Preencha os dados ou cole o comprovante.':'Confira os dados lidos antes de somar ao total. Você pode corrigir qualquer campo.'}</p>
+    ${single ? `<div class="card"><label class="f">Colar comprovante<textarea id="paste" rows="3" placeholder="Cole aqui o texto copiado do app do banco"></textarea></label><button class="btn" id="readPaste">Preencher com o que colei</button></div>` : ''}
+    ${list.map((c,k)=>{ const d=isDup(c); return `<div class="card" id="card${k}">
+      <div class="head"><span>${esc(c.arquivo)}</span><label class="chk"><input type="checkbox" id="inc${k}" ${d?'':'checked'}> Somar</label></div>
+      ${d?`<div class="dup">Parece repetido: já existe ${esc(d.favorecido)} · R$ ${fmt(d.valor)} em ${esc(brDate(d.data))}. Deixei desmarcado.</div>`:''}
+      ${c.confianca==='baixa'?`<div class="low">Leitura automática: confira valor, data e favorecido.</div>`:''}
+      ${fieldsHTML(c,k)}</div>`; }).join('')}
+    <div class="actions"><button class="btn" id="cancel">Descartar</button><button class="btn primary" id="save">Salvar e somar</button></div>`);
+  list.forEach((c,k)=>{ const cb=$('#inc'+k); const upd=()=>$('#card'+k).classList.toggle('skip',!cb.checked); cb.onchange=upd; upd(); });
+  $('#cancel').onclick=closeSheet;
+  const pa=$('#paste'), rp=$('#readPaste');
+  if (pa) pa.addEventListener('paste', e=>{ const fs=[...(e.clipboardData?.files||[])]; if (fs.length){ e.preventDefault(); closeSheet(); handleFiles(fs); } });
+  if (rp) rp.onclick=async()=>{
+    const t=pa.value.trim(); if (!t){ toast('Cole o texto do comprovante primeiro.'); pa.focus(); return; }
+    rp.disabled=true; rp.textContent='Lendo…';
+    const r=await readText(t);
+    if (r.length) openReview(r); else { toast('Não encontrei um pagamento nesse texto.'); rp.disabled=false; rp.textContent='Preencher com o que colei'; }
+  };
+  $('#save').onclick=()=>{
+    for (let k=0;k<list.length;k++){
+      if ($('#inc'+k).checked && !(parseValor($('#val'+k).value)>0)){ toast('Preencha o valor do pagamento antes de salvar.'); $('#val'+k).focus(); return; }
+    }
+    let n=0, sum=0, lastMes=null;
+    for (let k=0;k<list.length;k++){
+      if (!$('#inc'+k).checked) continue;
+      const rec = readFields(k, list[k]); rec.id=uid(); rec.criadoEm=Date.now();
+      all.push(rec); n++; sum+=rec.valor; lastMes=rec.mes;
+    }
+    if (!saveAll()) return;
+    closeSheet();
+    if (lastMes && lastMes!==cur){ cur=lastMes; lastTotal=null; }
+    render();
+    toast(n ? `${n===1?'1 comprovante somado':n+' comprovantes somados'}: + R$ ${fmt(sum)}` : 'Nada foi salvo');
+  };
+}
+
+function openEdit(c){
+  if (!c) return;
+  openSheet(`<h2>${esc(c.favorecido||'Comprovante')}</h2>
+    <p class="sub">Lido de ${esc(c.arquivo||'arquivo')}${c.pagador?' · pago por '+esc(c.pagador):''}</p>
+    <div class="card">${fieldsHTML(c,'e')}</div>
+    <div class="actions"><button class="btn danger" id="del">Excluir</button><button class="btn" id="cancel">Fechar</button><button class="btn primary" id="save">Salvar</button></div>`);
+  $('#cancel').onclick=closeSheet;
+  $('#save').onclick=()=>{
+    const rec = readFields('e', c);
+    all = all.map(x=>x.id===c.id?rec:x);
+    if (!saveAll()) return;
+    closeSheet(); if (rec.mes!==cur){ cur=rec.mes; lastTotal=null; } render(); toast('Comprovante atualizado');
+  };
+  const del=$('#del');
+  del.onclick=()=>{
+    if (!del.classList.contains('armed')){ del.classList.add('armed'); del.textContent='Confirmar exclusão'; return; }
+    closeSheet(); removeItem(c.id);
+  };
+}
+
+/* ---------- arquivos: CSV e backup ---------- */
+async function giveFile(name, content, type){
+  const blob = new Blob([content], {type});
+  const file = new File([blob], name, {type});
+  if (navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file], title:name}); return; }catch(e){ if (e.name==='AbortError') return; }
+  }
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+function csvMes(){
+  const items = all.filter(c=>c.mes===cur).sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+  const q = v => '"'+String(v??'').replace(/"/g,'""')+'"';
+  const rows = [['Data pagamento','Vencimento','Favorecido','Comentário','CPF/CNPJ','Tipo','Banco','Agência','Conta','Chave Pix','Valor','ID transação','Arquivo']]
+    .concat(items.map(c=>[brDate(c.data),brDate(c.vencimento),c.favorecido,c.comentario,c.documento,c.tipo,c.banco,c.agencia,c.conta,c.chavePix,fmt(c.valor),c.idTransacao,c.arquivo]));
+  rows.push(['','','TOTAL','','','','','','','',fmt(items.reduce((s,c)=>s+(Number(c.valor)||0),0)),'','']);
+  return '﻿'+rows.map(r=>r.map(q).join(';')).join('\r\n');
+}
+
+function openSettings(){
+  const has = !!cfg.geminiKey;
+  openSheet(`<h2>Configurações</h2>
+    <div class="card">
+      <h3>Leitura inteligente (grátis)</h3>
+      <p class="small">Com uma chave gratuita do Google Gemini, a leitura de fotos e PDFs fica bem mais precisa. Sem a chave, o app lê no próprio celular, de forma mais simples.</p>
+      <ol class="steps">
+        <li>Abra <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> e entre com sua conta Google.</li>
+        <li>Toque em <b>Create API key</b> (Criar chave) e copie a chave.</li>
+        <li>Cole abaixo e toque em <b>Salvar chave</b>.</li>
+      </ol>
+      <label class="f">Chave do Gemini<input id="gk" class="mono" value="${esc(cfg.geminiKey)}" placeholder="AIza..." autocomplete="off" spellcheck="false"></label>
+      <label class="f">Modelo<input id="gm" class="mono" value="${esc(cfg.model)}" spellcheck="false"></label>
+      <p class="small">A chave fica guardada só neste celular. No plano gratuito, o Google pode usar o conteúdo enviado para melhorar os serviços dele.</p>
+      <div class="actions">${has?'<button class="btn danger" id="gkDel">Remover chave</button>':''}<button class="btn primary" id="gkSave">Salvar chave</button></div>
+    </div>
+    <div class="card">
+      <h3>Planilha e backup</h3>
+      <p class="small">Os comprovantes ficam guardados só neste celular. Faça um backup de vez em quando e guarde no Drive ou no WhatsApp.</p>
+      <div class="actions"><button class="btn" id="csv">Planilha do mês (CSV)</button><button class="btn" id="bk">Fazer backup</button></div>
+      <label class="btn pick" id="restoreLbl">Restaurar backup<input type="file" id="restore" accept="application/json,.json"></label>
+      <p class="small">${all.length} comprovantes guardados no total.</p>
+    </div>
+    <div class="actions"><button class="btn" id="cancel">Fechar</button></div>`);
+  $('#cancel').onclick=closeSheet;
+  $('#gkSave').onclick=()=>{ cfg.geminiKey=$('#gk').value.trim(); cfg.model=$('#gm').value.trim()||'gemini-flash-latest'; saveCfg(); renderMode(); closeSheet(); toast(cfg.geminiKey?'Leitura inteligente ativada':'Chave removida'); };
+  const gd=$('#gkDel'); if (gd) gd.onclick=()=>{ cfg.geminiKey=''; saveCfg(); renderMode(); closeSheet(); toast('Chave removida'); };
+  $('#csv').onclick=()=>giveFile(`comprovantes-${cur}.csv`, csvMes(), 'text/csv');
+  $('#bk').onclick=()=>giveFile(`backup-comprovantes-${todayISO()}.json`, JSON.stringify({app:'comprovantes',versao:1,comprovantes:all},null,1), 'application/json');
+  $('#restore').onchange=async ev=>{
+    const f=ev.target.files[0]; ev.target.value=''; if (!f) return;
+    try{
+      const j=JSON.parse(await f.text()); const list=Array.isArray(j)?j:j.comprovantes;
+      if (!Array.isArray(list)) throw 0;
+      const ids=new Set(all.map(x=>x.id)); let n=0;
+      list.forEach(x=>{ if (x && x.id && !ids.has(x.id)){ all.push(x); n++; } });
+      saveAll(); closeSheet(); lastTotal=null; render(); toast(`${n} comprovantes restaurados`);
+    }catch(e){ toast('Arquivo de backup inválido.'); }
+  };
+}
+$('#btnSettings').onclick=openSettings;
+
+/* ---------- instalar e compartilhar para o app ---------- */
+let installEvt=null;
+window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); installEvt=e; $('#btnInstall').hidden=false; });
+$('#btnInstall').onclick=async()=>{ if (!installEvt) return; installEvt.prompt(); await installEvt.userChoice.catch(()=>{}); installEvt=null; $('#btnInstall').hidden=true; };
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+async function takeShared(){
+  const p=new URLSearchParams(location.search);
+  if (!p.has('shared')) return;
+  history.replaceState(null,'',location.pathname);
+  try{
+    const cache=await caches.open('share-inbox');
+    const keys=await cache.keys(); const files=[]; let text='';
+    for (const req of keys){
+      const res=await cache.match(req);
+      if (req.url.endsWith('/text')) text=await res.text();
+      else { const b=await res.blob(); files.push(new File([b], decodeURIComponent(res.headers.get('x-name')||'comprovante'), {type:b.type})); }
+      await cache.delete(req);
+    }
+    if (files.length) handleFiles(files);
+    else if (text.trim()){ const r=await readText(text); openReview(r.length?r:[blank('texto compartilhado')]); }
+  }catch(e){ setStatus('Não consegui abrir o comprovante compartilhado. Tente adicionar pelo botão.', true); }
+}
+
+renderMode();
+render();
+takeShared();
+</script>
+</body>
+</html>
