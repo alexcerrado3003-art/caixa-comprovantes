@@ -45,6 +45,15 @@
     }
     return '';
   }
+  const NOT_NAME = /(comprovante|transfer[eê]ncia|pagamento|valor|data|hor[aá]rio|ag[eê]ncia|conta|chave|cpf|cnpj|tipo|autentica|identificador|institui[cç][aã]o|banco|pagamentos|realizad|efetuad|situa[cç][aã]o|conclu[ií]d|sucesso|r\$)/i;
+  function nameLike(v) {
+    v = clean(v);
+    if (v.length < 3 || v.length > 80) return false;
+    if (!/^[A-Za-zÀ-ú]/.test(v) || (v.match(/\d/g) || []).length > 2) return false;
+    if ((v.match(/[A-Za-zÀ-ú]/g) || []).length < 3) return false;
+    if (LABEL.test(v) || NOT_NAME.test(v)) return false;
+    return true;
+  }
   function findIn(lines, labelRe) {
     for (let i = 0; i < lines.length; i++) if (labelRe.test(lines[i])) { const v = valueAfter(lines, i, labelRe); if (v) return v; }
     return '';
@@ -69,15 +78,26 @@
     const scope = dLines.length ? dLines : lines;
 
     // favorecido
-    let fav = findIn(scope, /^(nome( do (favorecido|recebedor|benefici[aá]rio))?|favorecido|recebedor|benefici[aá]rio|raz[aã]o social|cedente)\s*[:\-]?\s*/i);
+    const NAME_LBL = /^(nome( do (favorecido|recebedor|benefici[aá]rio|destinat[aá]rio))?|favorecido|recebedor|benefici[aá]rio|destinat[aá]rio|raz[aã]o social|cedente|pago para|enviado para|transferido para|para)\s*[:\-]?\s*/i;
+    let fav = findIn(scope, NAME_LBL);
+    if (!fav) {
+      // mesmo rótulo e nome na mesma linha, sem dois-pontos ("Nome  Maria Silva")
+      for (const l of scope) { const m = l.match(NAME_LBL); if (m) { const v = clean(l.slice(m[0].length)); if (nameLike(v)) { fav = v; break; } } }
+    }
+    if (!fav) {
+      const m = flat.match(/(?:voc[eê]\s+(?:transferiu|enviou|pagou|fez um pix)[^\n]*?\bpara|(?:pago|enviado|transferido|transfer[eê]ncia|pix|pagamento)\s+(?:para|a))\s*:?\s*\n?\s*([^\n]{3,80})/i);
+      if (m && nameLike(m[1])) fav = clean(m[1]);
+    }
     if (!fav && dLines.length) {
       const v = valueAfter(dLines, 0, DEST);
-      if (v && /[a-zA-ZÀ-ú]{3}/.test(v) && !/\d{3}/.test(v)) fav = v;
+      if (nameLike(v)) fav = v;
+      else fav = dLines.slice(1).map(clean).find(nameLike) || '';
     }
     fav = fav.replace(/\b(cpf|cnpj)\b.*$/i, '').trim();
 
     const doc = (scope.join(' ').match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|[\d*•]{3}\.[\d*•]{3}\.[\d*•]{3}-[\d*•]{2})/) || [])[1] || '';
     let banco = findIn(scope, /^(institui[cç][aã]o( financeira)?|banco)\s*[:\-]?\s*/i);
+    if (!banco) { for (const l of scope) { const m = l.match(/^institui[cç][aã]o(?:\s+financeira)?\s+(.{3,})$/i); if (m) { banco = m[1]; break; } } }
     const ag = (scope.join(' ').match(/ag[eê]ncia\s*[:\-]?\s*(\d{3,5}(?:-\d)?)/i) || [])[1] || '';
     const cc = (scope.join(' ').match(/conta(?:\s*(?:corrente|pagamento|poupan[cç]a))?\s*[:\-]?\s*([\d.]{3,}-?[\dxX]?)/i) || [])[1] || '';
     const pix = findIn(scope, /^chave(\s*pix)?\s*[:\-]?\s*/i);
