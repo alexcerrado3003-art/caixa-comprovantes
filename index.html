@@ -16,6 +16,7 @@
 :root{
   --bg:#EEF0F3; --surface:#FFFFFF; --ink:#1A2130; --muted:#5D6677; --line:#D9DDE4;
   --brass:#9A6B1F; --brass-soft:#F3E7D1; --on-brass:#FFFFFF; --ok:#2F7A4F; --warn:#A35A12; --bad:#B23A3A;
+  --pos-ink:#8BDCA9; --neg-ink:#FF9E9E;
   --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -23,7 +24,7 @@
 }
 @media (prefers-color-scheme: dark){:root{
   --bg:#11141A; --surface:#1A1F28; --ink:#E9ECF1; --muted:#9AA3B2; --line:#2B3240;
-  --brass:#D7A957; --brass-soft:#3A2F1B; --on-brass:#1A1408; --ok:#6CC08F; --warn:#E4A15A; --bad:#EE8080; color-scheme:dark}}
+  --brass:#D7A957; --brass-soft:#3A2F1B; --on-brass:#1A1408; --ok:#6CC08F; --warn:#E4A15A; --bad:#EE8080; --pos-ink:#1E6B40; --neg-ink:#A82E2E; color-scheme:dark}}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html{-webkit-text-size-adjust:100%}
@@ -135,6 +136,58 @@ label.f input.mono{font-family:var(--mono)}
 .steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;font-size:.9rem}
 .small{font-size:.82rem;color:var(--muted)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:.9rem;z-index:30;max-width:calc(100% - 32px)}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.tabs button{border:0;background:none;height:38px;border-radius:9px;font-weight:600;color:var(--muted)}
+.tabs button.on{background:var(--ink);color:var(--bg)}
+.view{display:flex;flex-direction:column;gap:16px}
+body.nodock{padding-bottom:calc(28px + env(safe-area-inset-bottom,0px))}
+.pos{color:var(--ok)} .neg{color:var(--bad)}
+.total .bump.pos{color:var(--pos-ink)}
+.tag.rec{background:color-mix(in srgb, var(--ok) 16%, transparent);color:var(--ok)}
+.row .val.pos{color:var(--ok)}
+.recadd{display:flex;flex-direction:column;gap:8px}
+button.topadd{width:100%;text-align:left;color:var(--ink);font:inherit}
+.topadd.rec{border-color:var(--ok);background:color-mix(in srgb, var(--ok) 9%, var(--surface))}
+.topadd.rec .plus{background:var(--ok);color:var(--surface)}
+.readrec{display:flex;align-items:center;justify-content:center;min-height:44px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--muted);font-size:.88rem;font-weight:600;cursor:pointer;padding:0 12px;text-align:center}
+.add.rec{background:var(--ok);box-shadow:0 6px 18px -8px var(--ok);color:var(--surface)}
+.result{background:var(--ink);color:var(--bg);border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:6px}
+.result .lbl{font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.7}
+.result .big{font-family:var(--display);font-weight:700;font-size:clamp(2rem,9vw,2.7rem);line-height:1.05;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.result .big .cur{font-size:.5em;font-weight:500;opacity:.8;margin-right:4px;vertical-align:.45em}
+.result.pos .big,.result.pos .verdict{color:var(--pos-ink)}
+.result.neg .big,.result.neg .verdict{color:var(--neg-ink)}
+.result .meta{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.85rem}
+.result .meta span:not(.verdict){opacity:.8}
+.result .verdict{font-weight:600}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.kpi{display:flex;flex-direction:column;gap:6px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;min-width:0}
+.kpi .lbl{font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:6px}
+.kpi b{font-size:1.15rem;font-weight:500;overflow-wrap:anywhere}
+.sw{display:inline-block;width:10px;height:10px;border-radius:3px}
+.sw.rec,.track i.rec{background:var(--ok)} .sw.desp,.track i.desp{background:var(--brass)}
+.track{display:block;height:8px;border-radius:4px;background:var(--bg);overflow:hidden}
+.track i{display:block;height:100%;border-radius:4px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.panel h3{margin:0;font-size:.95rem}
+.ph{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.legend{display:flex;gap:12px;font-size:.78rem;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.chart svg{display:block;width:100%;height:auto}
+.c-grid{stroke:var(--line);stroke-width:1}
+.c-base{stroke:var(--muted);stroke-width:1}
+.c-txt{fill:var(--muted);font:10px var(--mono)}
+.c-mon{fill:var(--muted);font:600 11px var(--body)}
+.c-mon.on{fill:var(--ink)}
+.c-sal{font:500 10px var(--mono)} .c-sal.pos{fill:var(--ok)} .c-sal.neg{fill:var(--bad)}
+.c-rec{fill:var(--ok)} .c-desp{fill:var(--brass)}
+#dash,#days,#recDays{display:flex;flex-direction:column;gap:14px}
+.cats{display:flex;flex-direction:column;gap:10px}
+.cat{display:flex;flex-direction:column;gap:4px}
+.catl{display:flex;justify-content:space-between;gap:10px;font-size:.88rem}
+.catl span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.catl .num{flex-shrink:0;font-size:.82rem}
+.catl em{font-style:normal;color:var(--muted);margin-left:4px}
 @media (max-width:380px){.grid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -156,6 +209,13 @@ label.f input.mono{font-family:var(--mono)}
     <button class="iconbtn" id="next" aria-label="Próximo mês">›</button>
   </div>
 
+  <nav class="tabs" role="tablist" aria-label="Seções">
+    <button role="tab" data-tab="desp" class="on" aria-selected="true">Despesas</button>
+    <button role="tab" data-tab="rec" aria-selected="false">Receitas</button>
+    <button role="tab" data-tab="dash" aria-selected="false">Resumo</button>
+  </nav>
+
+  <div class="view" id="viewDesp">
   <section class="total" id="totalCard" aria-live="polite">
     <span class="lbl">Total pago no mês</span>
     <span class="big"><span class="cur">R$</span><span id="totalVal">0,00</span></span>
@@ -172,19 +232,43 @@ label.f input.mono{font-family:var(--mono)}
   <div id="status"></div>
   <div class="progress" id="progress"></div>
   <div id="days"></div>
+  </div>
+
+  <div class="view" id="viewRec" hidden>
+    <section class="total" aria-live="polite">
+      <span class="lbl">Total recebido no mês</span>
+      <span class="big"><span class="cur">R$</span><span id="recTotal">0,00</span></span>
+      <div class="meta"><span id="recCount">0 receitas</span><span id="recBump" class="bump pos"></span></div>
+    </section>
+    <div class="recadd">
+      <button class="topadd rec" id="recNew">
+        <span class="plus" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+        <span><strong>Nova receita</strong><small>Vendas, recebimentos e outras entradas</small></span>
+      </button>
+      <label class="readrec pick" id="recRead"><span id="recReadTxt">Ler comprovante de Pix recebido</span>
+        <input type="file" id="fileRec" accept="image/*,application/pdf" multiple aria-label="Ler comprovante de recebimento"></label>
+    </div>
+    <div id="recDays"></div>
+  </div>
+
+  <div class="view" id="viewDash" hidden><div id="dash"></div></div>
 </div>
 
-<div class="dock"><div class="dockin">
+<div class="dock" id="dock"><div class="dockin" id="dockDesp">
   <label class="add pick" id="btnAdd">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
     <span id="addLabel">Adicionar comprovante</span>
     <input type="file" id="file" accept="image/*,application/pdf" multiple aria-label="Adicionar comprovante">
   </label>
   <button class="add2" id="btnManual">À mão</button>
+</div><div class="dockin" id="dockRec" hidden>
+  <button class="add rec" id="btnRec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Nova receita</button>
 </div></div>
 
 <div class="scrim" id="scrim" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
 <div class="toast" id="toast" hidden></div>
+<datalist id="cats"><option>Vendas na loja</option><option>Vendas no site</option><option>Vendas por WhatsApp</option><option>Atacado / revenda</option><option>Outras receitas</option></datalist>
+<datalist id="formas"><option>Pix</option><option>Cartão de crédito</option><option>Cartão de débito</option><option>Dinheiro</option><option>Boleto</option><option>Transferência</option></datalist>
 <datalist id="tipos"><option>Pix</option><option>TED</option><option>DOC</option><option>Boleto</option><option>Transferência</option><option>Cartão</option></datalist>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -238,14 +322,12 @@ function renderMode(){
   const g=$('#goSettings'); if (g) g.onclick=openSettings;
 }
 
-function shiftMonth(d){ const [y,m]=cur.split('-').map(Number); const dt=new Date(y,m-1+d,1); cur=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0'); lastTotal=null; render(); }
+function shiftMonth(d){ const [y,m]=cur.split('-').map(Number); const dt=new Date(y,m-1+d,1); cur=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0'); lastTotal=null; lastRec=null; render(); }
 $('#prev').onclick=()=>shiftMonth(-1);
 $('#next').onclick=()=>shiftMonth(1);
 
-function render(){
-  const [y,m]=cur.split('-').map(Number);
-  const ml = new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
-  $('#monthLabel').textContent = ml.charAt(0).toUpperCase()+ml.slice(1);
+const TRASH = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>`;
+function renderDesp(){
   const items = all.filter(c=>c.mes===cur).sort((a,b)=> (b.data||'').localeCompare(a.data||'') || (b.criadoEm||0)-(a.criadoEm||0));
   const total = Math.round(items.reduce((s,c)=>s+(Number(c.valor)||0),0)*100)/100;
   $('#totalVal').textContent = fmt(total);
@@ -288,6 +370,198 @@ function removeItem(id){
   const c=all.find(x=>x.id===id); if (!c) return;
   all=all.filter(x=>x.id!==id); saveAll(); render();
   toast(`Excluído: ${c.favorecido||'comprovante'} (− R$ ${fmt(c.valor)})`);
+}
+
+/* ---------- abas ---------- */
+const RKEY='cc:receitas';
+let recs = load(RKEY, []);
+const saveRecs = () => store(RKEY, recs);
+const sumV = arr => Math.round(arr.reduce((s,c)=>s+(Number(c.valor)||0),0)*100)/100;
+const blankRec = () => ({descricao:'',categoria:'',origem:'',forma:'Pix',valor:0,data:todayISO(),comentario:''});
+let tab = (()=>{ try{ return localStorage.getItem('cc:tab')||'desp'; }catch(e){ return 'desp'; } })();
+
+function setTab(t){
+  tab=t; try{ localStorage.setItem('cc:tab',t); }catch(e){}
+  document.querySelectorAll('.tabs button').forEach(b=>{ const on=b.dataset.tab===t; b.classList.toggle('on',on); b.setAttribute('aria-selected',String(on)); });
+  $('#viewDesp').hidden = t!=='desp'; $('#viewRec').hidden = t!=='rec'; $('#viewDash').hidden = t!=='dash';
+  $('#dockDesp').hidden = t!=='desp'; $('#dockRec').hidden = t!=='rec'; $('#dock').hidden = t==='dash';
+  document.body.classList.toggle('nodock', t==='dash');
+  if (t==='dash') renderDash();
+}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
+
+function render(){
+  const [y,m]=cur.split('-').map(Number);
+  const ml = new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  $('#monthLabel').textContent = ml.charAt(0).toUpperCase()+ml.slice(1);
+  renderDesp(); renderRec(); if (tab==='dash') renderDash();
+}
+
+/* ---------- receitas ---------- */
+let lastRec = null;
+function renderRec(){
+  const items = recs.filter(r=>r.mes===cur).sort((a,b)=> (b.data||'').localeCompare(a.data||'') || (b.criadoEm||0)-(a.criadoEm||0));
+  const total = sumV(items);
+  $('#recTotal').textContent = fmt(total);
+  $('#recCount').textContent = items.length + (items.length===1?' receita':' receitas');
+  $('#recBump').textContent = (lastRec!==null && total>lastRec) ? '+ R$ '+fmt(total-lastRec)+' agora' : (lastRec!==null && total!==lastRec ? '' : $('#recBump').textContent);
+  lastRec = total;
+  const box = $('#recDays');
+  if (!items.length){
+    box.innerHTML = `<div class="empty"><strong>Nenhuma receita neste mês</strong>Toque em “Nova receita” para lançar vendas e outros recebimentos. O resultado do mês aparece em Resumo.</div>`;
+    return;
+  }
+  const byDay = {};
+  items.forEach(r=>{ (byDay[r.data||'']=byDay[r.data||'']||[]).push(r); });
+  box.innerHTML = Object.keys(byDay).map(d=>{
+    const list=byDay[d];
+    const label = d ? new Date(d+'T12:00').toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit'}) : 'Sem data';
+    return `<div class="day"><h3><span>${esc(label)}</span><span class="num">R$ ${fmt(sumV(list))}</span></h3><div class="list">${
+      list.map(r=>{ const sub=[r.categoria, r.origem].filter(Boolean).join(' · ');
+        return `<div class="row" data-id="${esc(r.id)}"><button class="rowmain"><span class="who">${r.forma?`<span class="tag rec">${esc(r.forma)}</span>`:''}${esc(r.descricao||r.categoria||'Receita')}</span><span class="val pos">+ R$ ${fmt(r.valor)}</span>${sub?`<span class="acct">${esc(sub)}</span>`:''}${r.comentario?`<span class="note">${esc(r.comentario)}</span>`:''}</button><button class="del" aria-label="Excluir receita" title="Excluir receita">${TRASH}</button></div>`; }).join('')
+    }</div></div>`;
+  }).join('');
+  box.querySelectorAll('.row').forEach(rw=>{
+    const id=rw.dataset.id;
+    rw.querySelector('.rowmain').onclick=()=>{ const r=recs.find(x=>x.id===id); if (r) openRecSheet([r], id); };
+    const del=rw.querySelector('.del');
+    del.onclick=()=>{
+      if (!del.classList.contains('armed')){ del.classList.add('armed'); del.textContent='Excluir?'; setTimeout(()=>{ if (del.isConnected && del.classList.contains('armed')) render(); },4000); return; }
+      removeRec(id);
+    };
+  });
+}
+function removeRec(id){
+  const r=recs.find(x=>x.id===id); if (!r) return;
+  recs=recs.filter(x=>x.id!==id); saveRecs(); render();
+  toast(`Receita excluída (− R$ ${fmt(r.valor)})`);
+}
+function recFields(r,k){
+  return `<div class="grid">
+    <label class="f full">Descrição<input id="rds${k}" value="${esc(r.descricao)}" placeholder="Ex.: vendas do dia, pedido da cliente Ana"></label>
+    <label class="f">Valor recebido (R$)<input id="rvl${k}" class="mono" inputmode="decimal" value="${esc(fmt(r.valor))}"></label>
+    <label class="f">Data<input id="rdt${k}" type="date" value="${esc(r.data||todayISO())}"></label>
+    <label class="f">Categoria<input id="rct${k}" value="${esc(r.categoria)}" list="cats" placeholder="Vendas na loja"></label>
+    <label class="f">Forma<input id="rfm${k}" value="${esc(r.forma)}" list="formas"></label>
+    <label class="f full">Cliente / origem<input id="ror${k}" value="${esc(r.origem)}" placeholder="Opcional"></label>
+    <label class="f full">Comentário<input id="rcm${k}" value="${esc(r.comentario||'')}" placeholder="Opcional"></label>
+  </div>`;
+}
+function readRec(k, base){
+  const g=id=>($('#'+id+k)?.value||'').trim();
+  const data=g('rdt')||todayISO();
+  return {...base, descricao:g('rds'), valor:parseValor(g('rvl')), data, mes:monthOf(data), categoria:g('rct'), forma:g('rfm'), origem:g('ror'), comentario:g('rcm')};
+}
+function openRecSheet(list, editId){
+  const edit=!!editId, multi=list.length>1 || !!list[0].arquivo;
+  openSheet(`<h2>${edit?'Editar receita':(list.length>1?'Conferir '+list.length+' receitas':'Nova receita')}</h2>
+    ${edit?'':'<p class="sub">Vendas, recebimentos de clientes e outras entradas de dinheiro.</p>'}
+    ${list.map((r,k)=>`<div class="card" id="rcard${k}">${!edit&&multi?`<div class="head"><span>${esc(r.arquivo||'')}</span><label class="chk"><input type="checkbox" id="rinc${k}" checked> Somar</label></div>`:''}${recFields(r,k)}</div>`).join('')}
+    <div class="actions">${edit?'<button class="btn danger" id="rdel">Excluir</button>':''}<button class="btn" id="cancel">${edit?'Fechar':'Descartar'}</button><button class="btn primary" id="rsave">${edit?'Salvar':'Salvar receita'}</button></div>`);
+  list.forEach((r,k)=>{ const cb=$('#rinc'+k); if (cb) cb.onchange=()=>$('#rcard'+k).classList.toggle('skip',!cb.checked); });
+  const inc = k => { const cb=$('#rinc'+k); return cb ? cb.checked : true; };
+  $('#cancel').onclick=closeSheet;
+  if (!edit) setTimeout(()=>{ const f=$('#rds0'); if (f && !list[0].descricao) f.focus(); }, 60);
+  $('#rsave').onclick=()=>{
+    for (let k=0;k<list.length;k++) if (inc(k) && !(parseValor($('#rvl'+k).value)>0)){ toast('Preencha o valor recebido.'); $('#rvl'+k).focus(); return; }
+    let n=0, sum=0, mes=null;
+    if (edit){ const rec=readRec(0, list[0]); delete rec.arquivo; recs=recs.map(x=>x.id===editId?rec:x); mes=rec.mes; }
+    else for (let k=0;k<list.length;k++){
+      if (!inc(k)) continue;
+      const rec=readRec(k, list[k]); delete rec.arquivo; rec.id=uid(); rec.criadoEm=Date.now();
+      recs.push(rec); n++; sum+=rec.valor; mes=rec.mes;
+    }
+    if (!saveRecs()) return;
+    closeSheet();
+    if (mes && mes!==cur){ cur=mes; lastTotal=null; lastRec=null; }
+    render();
+    toast(edit ? 'Receita atualizada' : (n ? `${n===1?'Receita salva':n+' receitas salvas'}: + R$ ${fmt(sum)}` : 'Nada foi salvo'));
+  };
+  const del=$('#rdel');
+  if (del) del.onclick=()=>{
+    if (!del.classList.contains('armed')){ del.classList.add('armed'); del.textContent='Confirmar exclusão'; return; }
+    closeSheet(); removeRec(editId);
+  };
+}
+$('#btnRec').onclick=()=>openRecSheet([blankRec()]);
+$('#recNew').onclick=()=>openRecSheet([blankRec()]);
+$('#fileRec').onchange = ev => { const f=[...ev.target.files]; ev.target.value=''; handleRecFiles(f); };
+async function handleRecFiles(files){
+  if (!files.length) return;
+  const lbl=$('#recRead'); lbl.classList.add('busy'); const txt=$('#recReadTxt'); const old=txt.textContent;
+  const out=[];
+  for (let i=0;i<files.length;i++){
+    const f=files[i]; txt.textContent=`Lendo ${i+1} de ${files.length}…`;
+    try{
+      const r=await readFile(f);
+      if (r.items.length) r.items.forEach(it=>out.push({descricao: it.tipo?'Recebimento por '+it.tipo:'Recebimento', categoria:'', origem: it.pagador||'', forma: it.tipo||'Pix', valor: it.valor, data: it.data||todayISO(), comentario:'', arquivo:f.name}));
+      else out.push({...blankRec(), arquivo:f.name});
+    }catch(e){ out.push({...blankRec(), arquivo:f.name}); toast((e?.message||'Falha na leitura.')+' Preencha à mão.'); }
+  }
+  lbl.classList.remove('busy'); txt.textContent=old;
+  openRecSheet(out);
+}
+
+/* ---------- resumo ---------- */
+function addMonths(m,d){ const [y,mm]=m.split('-').map(Number); const dt=new Date(y,mm-1+d,1); return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0'); }
+const monthTotals = m => ({r:sumV(recs.filter(x=>x.mes===m)), d:sumV(all.filter(x=>x.mes===m))});
+const shortMonth = m => { const [y,mm]=m.split('-').map(Number); return new Date(y,mm-1,1).toLocaleDateString('pt-BR',{month:'short'}).replace('.',''); };
+function compact(v){
+  const a=Math.abs(v);
+  if (a>=1e6) return (v/1e6).toLocaleString('pt-BR',{maximumFractionDigits:1})+' mi';
+  if (a>=1e3) return (v/1e3).toLocaleString('pt-BR',{maximumFractionDigits:1})+' mil';
+  return Math.round(v).toLocaleString('pt-BR');
+}
+function niceMax(v){ if (v<=0) return 100; const p=Math.pow(10,Math.floor(Math.log10(v))); for (const s of [1,2,2.5,5,10]) if (s*p>=v) return s*p; return 10*p; }
+function chartSVG(series){
+  const W=360,H=210,pl=44,pr=6,pt=12,pb=46, ph=H-pt-pb, gw=(W-pl-pr)/series.length, bw=Math.min(16,gw*0.3);
+  const mx=niceMax(Math.max(...series.map(s=>Math.max(s.r,s.d))));
+  const y=v=>pt+ph-(v/mx)*ph;
+  let g='';
+  [0,mx/2,mx].forEach(t=>{ g+=`<line class="c-grid" x1="${pl}" x2="${W-pr}" y1="${y(t)}" y2="${y(t)}"/><text class="c-txt" x="${pl-6}" y="${y(t)+3.5}" text-anchor="end">${compact(t)}</text>`; });
+  series.forEach((s,i)=>{
+    const cx=pl+gw*i+gw/2, cur_=s.m===cur;
+    const hr=Math.max(s.r?2:0,(s.r/mx)*ph), hd=Math.max(s.d?2:0,(s.d/mx)*ph);
+    g+=`<rect class="c-rec" x="${cx-bw-1.5}" y="${pt+ph-hr}" width="${bw}" height="${hr}" rx="2"><title>Receitas ${shortMonth(s.m)}: R$ ${fmt(s.r)}</title></rect>`;
+    g+=`<rect class="c-desp" x="${cx+1.5}" y="${pt+ph-hd}" width="${bw}" height="${hd}" rx="2"><title>Despesas ${shortMonth(s.m)}: R$ ${fmt(s.d)}</title></rect>`;
+    const sal=s.r-s.d;
+    g+=`<text class="c-mon${cur_?' on':''}" x="${cx}" y="${H-pb+16}" text-anchor="middle">${esc(shortMonth(s.m))}</text>`;
+    if (s.r||s.d) g+=`<text class="c-sal ${sal>=0?'pos':'neg'}" x="${cx}" y="${H-pb+32}" text-anchor="middle">${sal>=0?'+':'−'}${(Math.abs(sal)/1000).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})}</text>`;
+  });
+  g+=`<line class="c-base" x1="${pl}" x2="${W-pr}" y1="${pt+ph}" y2="${pt+ph}"/>`;
+  return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Receitas e despesas dos últimos 6 meses">${g}</svg></div>`;
+}
+function groupBars(arr, keyFn, cls){
+  const map={}; arr.forEach(x=>{ const k=keyFn(x); map[k]=(map[k]||0)+(Number(x.valor)||0); });
+  let rows=Object.entries(map).sort((a,b)=>b[1]-a[1]);
+  if (rows.length>6){ const rest=rows.slice(5).reduce((s,r)=>s+r[1],0); rows=rows.slice(0,5).concat([['Outros',rest]]); }
+  const tot=rows.reduce((s,r)=>s+r[1],0)||1, mx=rows[0]?.[1]||1;
+  if (!rows.length) return `<p class="small">Nada lançado neste mês.</p>`;
+  return `<div class="cats">${rows.map(([k,v])=>`<div class="cat"><div class="catl"><span>${esc(k)}</span><span class="num">R$ ${fmt(v)} <em>${Math.round(v/tot*100)}%</em></span></div><span class="track"><i class="${cls}" style="width:${Math.max(2,v/mx*100)}%"></i></span></div>`).join('')}</div>`;
+}
+function renderDash(){
+  const {r,d}=monthTotals(cur); const s=Math.round((r-d)*100)/100;
+  const prev=monthTotals(addMonths(cur,-1)), ps=prev.r-prev.d;
+  const margem = r>0 ? Math.round(s/r*100) : null;
+  const mx=Math.max(r,d,1);
+  const mItems=all.filter(x=>x.mes===cur), rItems=recs.filter(x=>x.mes===cur);
+  const series=[...Array(6)].map((_,i)=>{ const m=addMonths(cur,i-5); return {m,...monthTotals(m)}; });
+  const empty = !r && !d;
+  const vsPrev = (prev.r||prev.d) ? `${s-ps>=0?'▲':'▼'} R$ ${fmt(Math.abs(s-ps))} em relação a ${shortMonth(addMonths(cur,-1))}` : '';
+  $('#dash').innerHTML = `
+    <section class="result ${s>=0?'pos':'neg'}">
+      <span class="lbl">Resultado do mês · receitas − despesas</span>
+      <span class="big"><span class="cur">${s<0?'− ':''}R$</span>${fmt(Math.abs(s))}</span>
+      <div class="meta"><span class="verdict">${empty?'Sem lançamentos':(s>=0?'Sobrou dinheiro':'Gastou mais do que recebeu')}</span>${margem!==null?`<span>Margem ${margem}%</span>`:''}${vsPrev?`<span>${vsPrev}</span>`:''}</div>
+    </section>
+    <div class="kpis">
+      <button class="kpi" data-go="rec"><span class="lbl"><i class="sw rec"></i>Receitas</span><b class="num">R$ ${fmt(r)}</b><span class="track"><i class="rec" style="width:${r/mx*100}%"></i></span><span class="small">${rItems.length} ${rItems.length===1?'lançamento':'lançamentos'}</span></button>
+      <button class="kpi" data-go="desp"><span class="lbl"><i class="sw desp"></i>Despesas</span><b class="num">R$ ${fmt(d)}</b><span class="track"><i class="desp" style="width:${d/mx*100}%"></i></span><span class="small">${mItems.length} ${mItems.length===1?'comprovante':'comprovantes'}</span></button>
+    </div>
+    <div class="panel"><div class="ph"><h3>Últimos 6 meses</h3><span class="legend"><span><i class="sw rec"></i>Receitas</span><span><i class="sw desp"></i>Despesas</span></span></div>${chartSVG(series)}<p class="small">Embaixo de cada mês: quanto sobrou (+) ou faltou (−), em mil reais.</p></div>
+    <div class="panel"><h3>Para onde foi o dinheiro</h3><p class="small">Despesas agrupadas pelo comentário de cada comprovante.</p>${groupBars(mItems, x=>(x.comentario||'').trim()||'Sem comentário', 'desp')}</div>
+    <div class="panel"><h3>De onde veio o dinheiro</h3><p class="small">Receitas agrupadas por categoria.</p>${groupBars(rItems, x=>(x.categoria||'').trim()||'Sem categoria', 'rec')}</div>`;
+  $('#dash').querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>setTab(b.dataset.go));
 }
 
 /* ---------- leitura ---------- */
@@ -573,6 +847,14 @@ function csvMes(){
   return '﻿'+rows.map(r=>r.map(q).join(';')).join('\r\n');
 }
 
+function csvRec(){
+  const items = recs.filter(c=>c.mes===cur).sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+  const q = v => '"'+String(v??'').replace(/"/g,'""')+'"';
+  const rows = [['Data','Descrição','Categoria','Forma','Cliente / origem','Comentário','Valor']]
+    .concat(items.map(c=>[brDate(c.data),c.descricao,c.categoria,c.forma,c.origem,c.comentario,fmt(c.valor)]));
+  rows.push(['','TOTAL','','','','',fmt(sumV(items))]);
+  return '\ufeff'+rows.map(r=>r.map(q).join(';')).join('\r\n');
+}
 function openSettings(){
   const has = !!cfg.geminiKey;
   openSheet(`<h2>Configurações</h2>
@@ -591,25 +873,29 @@ function openSettings(){
     </div>
     <div class="card">
       <h3>Planilha e backup</h3>
-      <p class="small">Os comprovantes ficam guardados só neste celular. Faça um backup de vez em quando e guarde no Drive ou no WhatsApp.</p>
-      <div class="actions"><button class="btn" id="csv">Planilha do mês (CSV)</button><button class="btn" id="bk">Fazer backup</button></div>
+      <p class="small">Despesas e receitas ficam guardadas só neste celular. Faça um backup de vez em quando e guarde no Drive ou no WhatsApp.</p>
+      <div class="actions"><button class="btn" id="csv">Despesas do mês (CSV)</button><button class="btn" id="csvRec">Receitas do mês (CSV)</button></div>
+      <div class="actions"><button class="btn" id="bk">Fazer backup</button></div>
       <label class="btn pick" id="restoreLbl">Restaurar backup<input type="file" id="restore" accept="application/json,.json"></label>
-      <p class="small">${all.length} comprovantes guardados no total.</p>
+      <p class="small">${all.length} comprovantes e ${recs.length} receitas guardados no total.</p>
     </div>
     <div class="actions"><button class="btn" id="cancel">Fechar</button></div>`);
   $('#cancel').onclick=closeSheet;
   $('#gkSave').onclick=()=>{ cfg.geminiKey=$('#gk').value.trim(); cfg.model=$('#gm').value.trim()||'gemini-flash-lite-latest'; saveCfg(); renderMode(); closeSheet(); toast(cfg.geminiKey?'Leitura inteligente ativada':'Chave removida'); };
   const gd=$('#gkDel'); if (gd) gd.onclick=()=>{ cfg.geminiKey=''; saveCfg(); renderMode(); closeSheet(); toast('Chave removida'); };
   $('#csv').onclick=()=>giveFile(`comprovantes-${cur}.csv`, csvMes(), 'text/csv');
-  $('#bk').onclick=()=>giveFile(`backup-comprovantes-${todayISO()}.json`, JSON.stringify({app:'comprovantes',versao:1,comprovantes:all},null,1), 'application/json');
+  $('#csvRec').onclick=()=>giveFile(`receitas-${cur}.csv`, csvRec(), 'text/csv');
+  $('#bk').onclick=()=>giveFile(`backup-comprovantes-${todayISO()}.json`, JSON.stringify({app:'comprovantes',versao:2,comprovantes:all,receitas:recs},null,1), 'application/json');
   $('#restore').onchange=async ev=>{
     const f=ev.target.files[0]; ev.target.value=''; if (!f) return;
     try{
       const j=JSON.parse(await f.text()); const list=Array.isArray(j)?j:j.comprovantes;
       if (!Array.isArray(list)) throw 0;
-      const ids=new Set(all.map(x=>x.id)); let n=0;
+      const ids=new Set(all.map(x=>x.id)); let n=0, nr=0;
       list.forEach(x=>{ if (x && x.id && !ids.has(x.id)){ all.push(x); n++; } });
-      saveAll(); closeSheet(); lastTotal=null; render(); toast(`${n} comprovantes restaurados`);
+      const rids=new Set(recs.map(x=>x.id));
+      (Array.isArray(j.receitas)?j.receitas:[]).forEach(x=>{ if (x && x.id && !rids.has(x.id)){ recs.push(x); nr++; } });
+      saveAll(); saveRecs(); closeSheet(); lastTotal=null; lastRec=null; render(); toast(`${n} comprovantes e ${nr} receitas restaurados`);
     }catch(e){ toast('Arquivo de backup inválido.'); }
   };
 }
@@ -634,12 +920,14 @@ async function takeShared(){
       else { const b=await res.blob(); files.push(new File([b], decodeURIComponent(res.headers.get('x-name')||'comprovante'), {type:b.type})); }
       await cache.delete(req);
     }
+    if (files.length || text.trim()) setTab('desp');
     if (files.length) handleFiles(files);
     else if (text.trim()){ const r=await readText(text); openReview(r.length?r:[blank('texto compartilhado')]); }
   }catch(e){ setStatus('Não consegui abrir o comprovante compartilhado. Tente adicionar pelo botão.', true); }
 }
 
 renderMode();
+setTab(tab);
 render();
 takeShared();
 </script>
