@@ -316,19 +316,29 @@ async function toJpeg(file, max=2000){
     const cv=document.createElement('canvas');cv.width=Math.max(1,Math.round(img.naturalWidth*s));cv.height=Math.max(1,Math.round(img.naturalHeight*s));
     const ctx=cv.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,cv.width,cv.height);ctx.drawImage(img,0,0,cv.width,cv.height);
     URL.revokeObjectURL(url);
-    return await new Promise(r=>cv.toBlob(b=>r(b||file),'image/jpeg',0.9));
+    return await new Promise(r=>cv.toBlob(b=>r(b||file),'image/jpeg',0.85));
   }catch(e){ return file; }
 }
 
 async function gemini(parts){
   const model = (cfg.model||'gemini-flash-latest').trim();
-  let res;
-  try{
-    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-      method:'POST', headers:{'Content-Type':'application/json','x-goog-api-key':cfg.geminiKey.trim()},
-      body: JSON.stringify({contents:[{role:'user',parts}], generationConfig:{responseMimeType:'application/json', temperature:0}})
-    });
-  }catch(e){ throw new Error('Sem conexão com a internet.'); }
+  const call = async (fast) => {
+    const ctl = new AbortController(); const t = setTimeout(()=>ctl.abort(), 60000);
+    const gen = {responseMimeType:'application/json', temperature:0};
+    if (fast) gen.thinkingConfig = {thinkingBudget:0};
+    try{
+      return await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method:'POST', signal:ctl.signal, headers:{'Content-Type':'application/json','x-goog-api-key':cfg.geminiKey.trim()},
+        body: JSON.stringify({contents:[{role:'user',parts}], generationConfig:gen})
+      });
+    }catch(e){ throw new Error(e.name==='AbortError' ? 'A leitura inteligente demorou demais.' : 'Sem conexão com a internet.'); }
+    finally{ clearTimeout(t); }
+  };
+  let res = await call(!gemini.noFast);
+  if (res.status===400 && !gemini.noFast){
+    let m=''; try{ m=(await res.clone().json())?.error?.message||''; }catch(e){}
+    if (/think/i.test(m)){ gemini.noFast=true; res = await call(false); }
+  }
   if (!res.ok){
     let msg=''; try{ msg=(await res.json())?.error?.message||''; }catch(e){}
     if (res.status===400 && /api key/i.test(msg)) throw new Error('Chave do Gemini inválida. Confira em Configurações.');
@@ -382,7 +392,7 @@ async function readFile(file, onStep){
     try{
       let part;
       if (isPdf) part = {inline_data:{mime_type:'application/pdf', data: await blobToBase64(file)}};
-      else { const j = await toJpeg(file); part = {inline_data:{mime_type:j.type||'image/jpeg', data: await blobToBase64(j)}}; }
+      else { const j = await toJpeg(file, 1600); part = {inline_data:{mime_type:j.type||'image/jpeg', data: await blobToBase64(j)}}; }
       return {items: mapOut(await gemini([{text:PROMPT}, part]), file.name)};
     }catch(e){
       if (!/internet|conex/i.test(e.message)) { const r = await readBasic(file, isPdf, onStep); r.warn = e.message+' Usei a leitura básica.'; return r; }
@@ -422,20 +432,24 @@ async function handleFiles(files){
   const prog=$('#progress');
   prog.innerHTML = files.map((f,i)=>`<div class="pitem"><span>${esc(f.name||'arquivo')}</span><span class="st" id="st${i}">na fila</span></div>`).join('');
   const addMsg=(i,m)=>{ const d=document.createElement('div'); d.className='pmsg'; d.textContent=m; $('#st'+i).parentNode.appendChild(d); };
-  const found=[]; let errs=0;
-  for (let i=0;i<files.length;i++){
-    const st=$('#st'+i), f=files[i];
+  const results=new Array(files.length); let errs=0, next=0;
+  const one = async i => {
+    const st=$('#st'+i), f=files[i], t0=Date.now(); let label='lendo…';
+    const tick=setInterval(()=>{ st.textContent=label+' '+Math.round((Date.now()-t0)/1000)+'s'; },1000);
     try{
-      const r = await readFile(f, s=>{ st.textContent=s; });
+      const r = await readFile(f, s=>{ label=s; st.textContent=s; });
       if (r.warn) addMsg(i, r.warn);
-      if (r.items.length){ found.push(...r.items); st.textContent = r.items.length===1?'1 pagamento':r.items.length+' pagamentos'; }
-      else { errs++; found.push(blank(f.name)); st.textContent='não reconhecido'; st.classList.add('bad'); addMsg(i,'Não encontrei um pagamento neste arquivo. Abri para você preencher à mão.'); }
+      if (r.items.length){ results[i]=r.items; st.textContent = (r.items.length===1?'1 pagamento':r.items.length+' pagamentos')+' · '+Math.round((Date.now()-t0)/1000)+'s'; }
+      else { errs++; results[i]=[blank(f.name)]; st.textContent='não reconhecido'; st.classList.add('bad'); addMsg(i,'Não encontrei um pagamento neste arquivo. Abri para você preencher à mão.'); }
     }catch(e){
       errs++; st.textContent='não lido'; st.classList.add('bad');
       addMsg(i, (e?.message||'Falha na leitura.')+' Abri para você preencher à mão.');
-      found.push(blank(f.name));
-    }
-  }
+      results[i]=[blank(f.name)];
+    }finally{ clearInterval(tick); }
+  };
+  const lanes = cfg.geminiKey ? 3 : 1;
+  await Promise.all(Array.from({length:Math.min(lanes,files.length)}, async()=>{ while (next<files.length) await one(next++); }));
+  const found = results.flat().filter(Boolean);
   busy(false);
   if (!errs) setTimeout(()=>{ prog.innerHTML=''; }, 600);
   if (found.length) openReview(found);
