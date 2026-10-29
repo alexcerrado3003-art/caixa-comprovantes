@@ -1,5 +1,5 @@
 /* Service worker: funciona offline, atualiza o app e recebe comprovantes compartilhados de outros apps. */
-const V = 'cc-v3';
+const V = 'cc-v4';
 const SHELL = ['./', 'index.html', 'parser.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 const CDN = /^(https:\/\/(cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|fonts\.googleapis\.com|fonts\.gstatic\.com))\//;
 

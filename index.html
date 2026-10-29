@@ -220,7 +220,8 @@ const KEY='cc:comprovantes', CFG='cc:config';
 function load(k, d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
 function store(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); return true; }catch(e){ toast('Não foi possível salvar no aparelho (memória cheia?).'); return false; } }
 let all = load(KEY, []);
-let cfg = Object.assign({geminiKey:'', model:'gemini-flash-latest'}, load(CFG, {}));
+let cfg = Object.assign({geminiKey:'', model:'gemini-flash-lite-latest'}, load(CFG, {}));
+if (!cfg.v2){ if (!cfg.model || cfg.model==='gemini-flash-latest') cfg.model='gemini-flash-lite-latest'; cfg.v2=true; try{ localStorage.setItem('cc:config', JSON.stringify(cfg)); }catch(e){} }
 const saveAll = () => store(KEY, all);
 const saveCfg = () => store(CFG, cfg);
 if (navigator.storage?.persist) navigator.storage.persist().catch(()=>{});
@@ -321,29 +322,36 @@ async function toJpeg(file, max=2000){
 }
 
 async function gemini(parts){
-  const model = (cfg.model||'gemini-flash-latest').trim();
-  const call = async (fast) => {
+  const model = (cfg.model||'gemini-flash-lite-latest').trim();
+  const THINK = [{thinkingLevel:'minimal'}, {thinkingBudget:0}, null];
+  const call = async (mdl, think) => {
     const ctl = new AbortController(); const t = setTimeout(()=>ctl.abort(), 60000);
     const gen = {responseMimeType:'application/json', temperature:0};
-    if (fast) gen.thinkingConfig = {thinkingBudget:0};
+    if (think) gen.thinkingConfig = think;
     try{
-      return await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      return await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(mdl)}:generateContent`, {
         method:'POST', signal:ctl.signal, headers:{'Content-Type':'application/json','x-goog-api-key':cfg.geminiKey.trim()},
         body: JSON.stringify({contents:[{role:'user',parts}], generationConfig:gen})
       });
     }catch(e){ throw new Error(e.name==='AbortError' ? 'A leitura inteligente demorou demais.' : 'Sem conexão com a internet.'); }
     finally{ clearTimeout(t); }
   };
-  let res = await call(!gemini.noFast);
-  if (res.status===400 && !gemini.noFast){
-    let m=''; try{ m=(await res.clone().json())?.error?.message||''; }catch(e){}
-    if (/think/i.test(m)){ gemini.noFast=true; res = await call(false); }
+  let mdl = model, ti = Math.min(cfg.thinkIdx||0, 2), res;
+  for (let tries=0; tries<5; tries++){
+    res = await call(mdl, THINK[ti]);
+    if (res.status===400 && ti<2){
+      let m=''; try{ m=(await res.clone().json())?.error?.message||''; }catch(e){}
+      if (/think/i.test(m)){ ti++; continue; }
+    }
+    if (res.status===404 && mdl!=='gemini-flash-latest'){ mdl='gemini-flash-latest'; continue; }
+    break;
   }
+  if (res.ok && (cfg.thinkIdx!==ti || cfg.model!==mdl)){ cfg.thinkIdx=ti; cfg.model=mdl; saveCfg(); }
   if (!res.ok){
     let msg=''; try{ msg=(await res.json())?.error?.message||''; }catch(e){}
     if (res.status===400 && /api key/i.test(msg)) throw new Error('Chave do Gemini inválida. Confira em Configurações.');
     if (res.status===403) throw new Error('Chave do Gemini sem permissão. Gere uma nova em Configurações.');
-    if (res.status===404) throw new Error('Modelo do Gemini não encontrado. Em Configurações, use "gemini-flash-latest".');
+    if (res.status===404) throw new Error('Modelo do Gemini não encontrado. Em Configurações, use "gemini-flash-lite-latest".');
     if (res.status===429) throw new Error('Limite gratuito do Gemini atingido por agora. Tente mais tarde.');
     throw new Error('Gemini respondeu com erro '+res.status+'.');
   }
@@ -590,7 +598,7 @@ function openSettings(){
     </div>
     <div class="actions"><button class="btn" id="cancel">Fechar</button></div>`);
   $('#cancel').onclick=closeSheet;
-  $('#gkSave').onclick=()=>{ cfg.geminiKey=$('#gk').value.trim(); cfg.model=$('#gm').value.trim()||'gemini-flash-latest'; saveCfg(); renderMode(); closeSheet(); toast(cfg.geminiKey?'Leitura inteligente ativada':'Chave removida'); };
+  $('#gkSave').onclick=()=>{ cfg.geminiKey=$('#gk').value.trim(); cfg.model=$('#gm').value.trim()||'gemini-flash-lite-latest'; saveCfg(); renderMode(); closeSheet(); toast(cfg.geminiKey?'Leitura inteligente ativada':'Chave removida'); };
   const gd=$('#gkDel'); if (gd) gd.onclick=()=>{ cfg.geminiKey=''; saveCfg(); renderMode(); closeSheet(); toast('Chave removida'); };
   $('#csv').onclick=()=>giveFile(`comprovantes-${cur}.csv`, csvMes(), 'text/csv');
   $('#bk').onclick=()=>giveFile(`backup-comprovantes-${todayISO()}.json`, JSON.stringify({app:'comprovantes',versao:1,comprovantes:all},null,1), 'application/json');
