@@ -181,6 +181,17 @@ button.topadd{width:100%;text-align:left;color:var(--ink);font:inherit}
 .c-mon.on{fill:var(--ink)}
 .c-sal{font:500 10px var(--mono)} .c-sal.pos{fill:var(--ok)} .c-sal.neg{fill:var(--bad)}
 .c-rec{fill:var(--ok)} .c-desp{fill:var(--brass)}
+.disp{display:flex;flex-direction:column;gap:8px;border-top:1px dashed var(--line);padding-top:10px}
+.disp .dl{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:3px}
+.seg label{position:relative;display:flex}
+.seg input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.seg span{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;min-height:38px;padding:4px 6px;border-radius:8px;font-size:.8rem;font-weight:600;color:var(--muted);line-height:1.2}
+.seg input:checked+span{background:var(--ok);color:var(--surface)}
+.seg input:focus-visible+span{outline:2px solid var(--brass);outline-offset:1px}
+.disp-tag{font-family:var(--body);font-weight:600;color:var(--ok);margin-right:4px}
+.row.out .who,.row.out .acct{opacity:.7}
+.row .val.muted{color:var(--muted)}
 #dash,#days,#recDays{display:flex;flex-direction:column;gap:14px}
 .cats{display:flex;flex-direction:column;gap:10px}
 .cat{display:flex;flex-direction:column;gap:4px}
@@ -236,7 +247,7 @@ button.topadd{width:100%;text-align:left;color:var(--ink);font:inherit}
 
   <div class="view" id="viewRec" hidden>
     <section class="total" aria-live="polite">
-      <span class="lbl">Total recebido no mês</span>
+      <span class="lbl">Receitas do mês</span>
       <span class="big"><span class="cur">R$</span><span id="recTotal">0,00</span></span>
       <div class="meta"><span id="recCount">0 receitas</span><span id="recBump" class="bump pos"></span></div>
     </section>
@@ -248,6 +259,7 @@ button.topadd{width:100%;text-align:left;color:var(--ink);font:inherit}
       <label class="readrec pick" id="recRead"><span id="recReadTxt">Ler comprovante de Pix recebido</span>
         <input type="file" id="fileRec" accept="image/*,application/pdf" multiple aria-label="Ler comprovante de recebimento"></label>
     </div>
+    <p class="notice" id="recFora" hidden></p>
     <div id="recDays"></div>
   </div>
 
@@ -400,25 +412,41 @@ function render(){
 /* ---------- receitas ---------- */
 let lastRec = null;
 function renderRec(){
-  const items = recs.filter(r=>r.mes===cur).sort((a,b)=> (b.data||'').localeCompare(a.data||'') || (b.criadoEm||0)-(a.criadoEm||0));
-  const total = sumV(items);
+  const parts = recPortions(cur);
+  const outros = recs.filter(r=>r.mes===cur && alocacoes(r).some(a=>a.mes!==cur));
+  const total = sumV(parts);
   $('#recTotal').textContent = fmt(total);
-  $('#recCount').textContent = items.length + (items.length===1?' receita':' receitas');
+  $('#recCount').textContent = parts.length + (parts.length===1?' receita':' receitas');
   $('#recBump').textContent = (lastRec!==null && total>lastRec) ? '+ R$ '+fmt(total-lastRec)+' agora' : (lastRec!==null && total!==lastRec ? '' : $('#recBump').textContent);
   lastRec = total;
+  const fora = outros.reduce((s,r)=>s+alocacoes(r).filter(a=>a.mes!==cur).reduce((t,a)=>t+a.valor,0),0);
+  $('#recFora').hidden = !fora;
+  $('#recFora').innerHTML = fora ? `Também entrou neste mês <b class="num">R$ ${fmt(fora)}</b> que conta em outros meses. Esses lançamentos aparecem em cinza na lista, com o mês em que contam.` : '';
   const box = $('#recDays');
-  if (!items.length){
+  // linhas: partes que contam neste mês + recebimentos deste mês reservados para outros meses
+  const rows = parts.map(p=>({...p, _key:p.data||''}));
+  outros.forEach(r=>{ if (!parts.some(p=>p.id===r.id)) rows.push({...r, _out:true, _key:r.data||''}); else rows.forEach(x=>{ if (x.id===r.id) x._tambem=true; }); });
+  if (!rows.length){
     box.innerHTML = `<div class="empty"><strong>Nenhuma receita neste mês</strong>Toque em “Nova receita” para lançar vendas e outros recebimentos. O resultado do mês aparece em Resumo.</div>`;
     return;
   }
+  // receitas antecipadas de meses anteriores aparecem no dia 1 do mês
+  rows.forEach(x=>{ if (x._antec || monthOf(x.data)!==cur) x._key = cur+'-01'; });
+  rows.sort((a,b)=> b._key.localeCompare(a._key) || (b.criadoEm||0)-(a.criadoEm||0));
   const byDay = {};
-  items.forEach(r=>{ (byDay[r.data||'']=byDay[r.data||'']||[]).push(r); });
+  rows.forEach(r=>{ (byDay[r._key]=byDay[r._key]||[]).push(r); });
   box.innerHTML = Object.keys(byDay).map(d=>{
     const list=byDay[d];
     const label = d ? new Date(d+'T12:00').toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit'}) : 'Sem data';
-    return `<div class="day"><h3><span>${esc(label)}</span><span class="num">R$ ${fmt(sumV(list))}</span></h3><div class="list">${
-      list.map(r=>{ const sub=[r.categoria, r.origem].filter(Boolean).join(' · ');
-        return `<div class="row" data-id="${esc(r.id)}"><button class="rowmain"><span class="who">${r.forma?`<span class="tag rec">${esc(r.forma)}</span>`:''}${esc(r.descricao||r.categoria||'Receita')}</span><span class="val pos">+ R$ ${fmt(r.valor)}</span>${sub?`<span class="acct">${esc(sub)}</span>`:''}${r.comentario?`<span class="note">${esc(r.comentario)}</span>`:''}</button><button class="del" aria-label="Excluir receita" title="Excluir receita">${TRASH}</button></div>`; }).join('')
+    return `<div class="day"><h3><span>${esc(label)}</span><span class="num">R$ ${fmt(sumV(list.filter(x=>!x._out)))}</span></h3><div class="list">${
+      list.map(r=>{
+        const al=alocacoes(r);
+        const info = r._out ? `<span class="disp-tag">para ${al.map(a=>mesCurto(a.mes)).join(', ')}</span>`
+          : r._parc ? `<span class="disp-tag">parte ${r._parc} · total R$ ${fmt(r._full)}</span>`
+          : r._antec ? `<span class="disp-tag">recebida em ${esc(brDate(r.data))}</span>` : '';
+        const sub=[r.categoria, r.origem].filter(Boolean).join(' · ');
+        const valor = r._out ? `<span class="val muted">R$ ${fmt(r.valor)}</span>` : `<span class="val pos">+ R$ ${fmt(r.valor)}</span>`;
+        return `<div class="row${r._out?' out':''}" data-id="${esc(r.id)}"><button class="rowmain"><span class="who">${r.forma?`<span class="tag rec">${esc(r.forma)}</span>`:''}${esc(r.descricao||r.categoria||'Receita')}</span>${valor}${(sub||info)?`<span class="acct">${info}${info&&sub?' ':''}${esc(sub)}</span>`:''}${r.comentario?`<span class="note">${esc(r.comentario)}</span>`:''}</button><button class="del" aria-label="Excluir receita" title="Excluir receita">${TRASH}</button></div>`; }).join('')
     }</div></div>`;
   }).join('');
   box.querySelectorAll('.row').forEach(rw=>{
@@ -445,12 +473,16 @@ function recFields(r,k){
     <label class="f">Forma<input id="rfm${k}" value="${esc(r.forma)}" list="formas"></label>
     <label class="f full">Cliente / origem<input id="ror${k}" value="${esc(r.origem)}" placeholder="Opcional"></label>
     <label class="f full">Comentário<input id="rcm${k}" value="${esc(r.comentario||'')}" placeholder="Opcional"></label>
+    ${dispHTML(r,k)}
   </div>`;
 }
 function readRec(k, base){
   const g=id=>($('#'+id+k)?.value||'').trim();
   const data=g('rdt')||todayISO();
-  return {...base, descricao:g('rds'), valor:parseValor(g('rvl')), data, mes:monthOf(data), categoria:g('rct'), forma:g('rfm'), origem:g('ror'), comentario:g('rcm')};
+  const rec = {...base, descricao:g('rds'), valor:parseValor(g('rvl')), data, mes:monthOf(data), categoria:g('rct'), forma:g('rfm'), origem:g('ror'), comentario:g('rcm')};
+  const al = readAloc(k, rec);
+  if (al) rec.alocacao = al; else delete rec.alocacao;
+  return rec;
 }
 function openRecSheet(list, editId){
   const edit=!!editId, multi=list.length>1 || !!list[0].arquivo;
@@ -458,18 +490,18 @@ function openRecSheet(list, editId){
     ${edit?'':'<p class="sub">Vendas, recebimentos de clientes e outras entradas de dinheiro.</p>'}
     ${list.map((r,k)=>`<div class="card" id="rcard${k}">${!edit&&multi?`<div class="head"><span>${esc(r.arquivo||'')}</span><label class="chk"><input type="checkbox" id="rinc${k}" checked> Somar</label></div>`:''}${recFields(r,k)}</div>`).join('')}
     <div class="actions">${edit?'<button class="btn danger" id="rdel">Excluir</button>':''}<button class="btn" id="cancel">${edit?'Fechar':'Descartar'}</button><button class="btn primary" id="rsave">${edit?'Salvar':'Salvar receita'}</button></div>`);
-  list.forEach((r,k)=>{ const cb=$('#rinc'+k); if (cb) cb.onchange=()=>$('#rcard'+k).classList.toggle('skip',!cb.checked); });
+  list.forEach((r,k)=>{ wireDisp(k); const cb=$('#rinc'+k); if (cb) cb.onchange=()=>$('#rcard'+k).classList.toggle('skip',!cb.checked); });
   const inc = k => { const cb=$('#rinc'+k); return cb ? cb.checked : true; };
   $('#cancel').onclick=closeSheet;
   if (!edit) setTimeout(()=>{ const f=$('#rds0'); if (f && !list[0].descricao) f.focus(); }, 60);
   $('#rsave').onclick=()=>{
     for (let k=0;k<list.length;k++) if (inc(k) && !(parseValor($('#rvl'+k).value)>0)){ toast('Preencha o valor recebido.'); $('#rvl'+k).focus(); return; }
     let n=0, sum=0, mes=null;
-    if (edit){ const rec=readRec(0, list[0]); delete rec.arquivo; recs=recs.map(x=>x.id===editId?rec:x); mes=rec.mes; }
+    if (edit){ const rec=readRec(0, list[0]); delete rec.arquivo; recs=recs.map(x=>x.id===editId?rec:x); mes=alocacoes(rec).some(a=>a.mes===cur)?cur:alocacoes(rec)[0].mes; }
     else for (let k=0;k<list.length;k++){
       if (!inc(k)) continue;
       const rec=readRec(k, list[k]); delete rec.arquivo; rec.id=uid(); rec.criadoEm=Date.now();
-      recs.push(rec); n++; sum+=rec.valor; mes=rec.mes;
+      recs.push(rec); n++; sum+=rec.valor; mes=alocacoes(rec)[0].mes;
     }
     if (!saveRecs()) return;
     closeSheet();
@@ -502,9 +534,68 @@ async function handleRecFiles(files){
   openRecSheet(out);
 }
 
+/* ---------- disponibilidade das receitas ---------- */
+const mesCurto = m => { const [y,mm]=m.split('-').map(Number); return new Date(y,mm-1,1).toLocaleDateString('pt-BR',{month:'short'}).replace('.','')+'/'+String(y).slice(2); };
+function alocacoes(r){ return (Array.isArray(r.alocacao) && r.alocacao.length) ? r.alocacao : [{mes:r.mes, valor:Number(r.valor)||0}]; }
+// partes de cada receita que contam no mês m
+function recPortions(m){
+  const out=[];
+  recs.forEach(r=>{ const al=alocacoes(r); al.forEach((a,i)=>{ if (a.mes===m) out.push({...r, valor:a.valor, _full:r.valor, _parc: al.length>1 ? `${i+1}/${al.length}` : '', _antec: a.mes!==r.mes}); }); });
+  return out;
+}
+function splitParcelas(total, n, startMes){
+  const cents=Math.round(total*100), base=Math.floor(cents/n), out=[];
+  for (let i=0;i<n;i++) out.push({mes:addMonths(startMes,i), valor:(base + (i===n-1 ? cents-base*n : 0))/100});
+  return out;
+}
+function dispHTML(r,k){
+  const al=Array.isArray(r.alocacao)&&r.alocacao.length ? r.alocacao : null;
+  const mode = !al ? 'mes' : (al.length===1 ? 'outro' : 'parc');
+  const base = monthOf(r.data||todayISO());
+  return `<div class="disp full" id="disp${k}">
+    <span class="dl">Conta no resultado de qual mês?</span>
+    <div class="seg" role="radiogroup">
+      <label><input type="radio" name="ral${k}" value="mes" ${mode==='mes'?'checked':''}><span>Mês do recebimento</span></label>
+      <label><input type="radio" name="ral${k}" value="outro" ${mode==='outro'?'checked':''}><span>Outro mês</span></label>
+      <label><input type="radio" name="ral${k}" value="parc" ${mode==='parc'?'checked':''}><span>Dividir em meses</span></label>
+    </div>
+    <div class="grid" id="dOutro${k}" ${mode==='outro'?'':'hidden'}>
+      <label class="f full">Disponível em<input id="rme${k}" type="month" value="${esc(mode==='outro'?al[0].mes:addMonths(base,1))}"></label>
+    </div>
+    <div class="grid" id="dParc${k}" ${mode==='parc'?'':'hidden'}>
+      <label class="f">Quantos meses<input id="rnp${k}" type="number" inputmode="numeric" min="2" max="24" value="${mode==='parc'?al.length:2}"></label>
+      <label class="f">A partir de<input id="rms${k}" type="month" value="${esc(mode==='parc'?al[0].mes:base)}"></label>
+    </div>
+    <p class="small" id="dPrev${k}"></p>
+  </div>`;
+}
+function readAloc(k, rec){
+  const mode=(document.querySelector(`input[name="ral${k}"]:checked`)||{}).value||'mes';
+  if (mode==='outro'){ const m=$('#rme'+k).value; if (/^\d{4}-\d{2}$/.test(m) && m!==rec.mes) return [{mes:m, valor:rec.valor}]; return null; }
+  if (mode==='parc'){
+    const n=Math.max(2,Math.min(24,parseInt($('#rnp'+k).value,10)||2)), m=$('#rms'+k).value;
+    if (!/^\d{4}-\d{2}$/.test(m) || !(rec.valor>0)) return null;
+    return splitParcelas(rec.valor, n, m);
+  }
+  return null;
+}
+function wireDisp(k){
+  const upd=()=>{
+    const mode=(document.querySelector(`input[name="ral${k}"]:checked`)||{}).value||'mes';
+    $('#dOutro'+k).hidden = mode!=='outro'; $('#dParc'+k).hidden = mode!=='parc';
+    const v=parseValor($('#rvl'+k).value), d=$('#rdt'+k).value||todayISO();
+    const al=readAloc(k,{valor:v, mes:monthOf(d)});
+    $('#dPrev'+k).textContent = mode==='mes' ? `Conta em ${mesCurto(monthOf(d))}, mês em que o dinheiro entrou.`
+      : !al ? (mode==='outro' ? 'Escolha um mês diferente do recebimento.' : 'Preencha o valor para ver a divisão.')
+      : al.map(a=>`${mesCurto(a.mes)}: R$ ${fmt(a.valor)}`).join(' · ');
+  };
+  document.querySelectorAll(`#disp${k} input, #rvl${k}, #rdt${k}`).forEach(el=>{ el.addEventListener('input',upd); el.addEventListener('change',upd); });
+  upd();
+}
+
 /* ---------- resumo ---------- */
 function addMonths(m,d){ const [y,mm]=m.split('-').map(Number); const dt=new Date(y,mm-1+d,1); return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0'); }
-const monthTotals = m => ({r:sumV(recs.filter(x=>x.mes===m)), d:sumV(all.filter(x=>x.mes===m))});
+const monthTotals = m => ({r:sumV(recPortions(m)), d:sumV(all.filter(x=>x.mes===m))});
 const shortMonth = m => { const [y,mm]=m.split('-').map(Number); return new Date(y,mm-1,1).toLocaleDateString('pt-BR',{month:'short'}).replace('.',''); };
 function compact(v){
   const a=Math.abs(v);
@@ -544,7 +635,7 @@ function renderDash(){
   const prev=monthTotals(addMonths(cur,-1)), ps=prev.r-prev.d;
   const margem = r>0 ? Math.round(s/r*100) : null;
   const mx=Math.max(r,d,1);
-  const mItems=all.filter(x=>x.mes===cur), rItems=recs.filter(x=>x.mes===cur);
+  const mItems=all.filter(x=>x.mes===cur), rItems=recPortions(cur);
   const series=[...Array(6)].map((_,i)=>{ const m=addMonths(cur,i-5); return {m,...monthTotals(m)}; });
   const empty = !r && !d;
   const vsPrev = (prev.r||prev.d) ? `${s-ps>=0?'▲':'▼'} R$ ${fmt(Math.abs(s-ps))} em relação a ${shortMonth(addMonths(cur,-1))}` : '';
@@ -848,12 +939,12 @@ function csvMes(){
 }
 
 function csvRec(){
-  const items = recs.filter(c=>c.mes===cur).sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+  const items = recPortions(cur).sort((a,b)=>(a.data||'').localeCompare(b.data||''));
   const q = v => '"'+String(v??'').replace(/"/g,'""')+'"';
-  const rows = [['Data','Descrição','Categoria','Forma','Cliente / origem','Comentário','Valor']]
-    .concat(items.map(c=>[brDate(c.data),c.descricao,c.categoria,c.forma,c.origem,c.comentario,fmt(c.valor)]));
-  rows.push(['','TOTAL','','','','',fmt(sumV(items))]);
-  return '\ufeff'+rows.map(r=>r.map(q).join(';')).join('\r\n');
+  const rows = [['Recebido em','Conta em','Parte','Descrição','Categoria','Forma','Cliente / origem','Comentário','Valor no mês','Valor total recebido']]
+    .concat(items.map(c=>[brDate(c.data),mesCurto(cur),c._parc,c.descricao,c.categoria,c.forma,c.origem,c.comentario,fmt(c.valor),fmt(c._full)]));
+  rows.push(['','','','TOTAL','','','','',fmt(sumV(items)),'']);
+  return '﻿'+rows.map(r=>r.map(q).join(';')).join('\r\n');
 }
 function openSettings(){
   const has = !!cfg.geminiKey;
