@@ -189,6 +189,11 @@ button.topadd{width:100%;text-align:left;color:var(--ink);font:inherit}
 .seg span{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;min-height:38px;padding:4px 6px;border-radius:8px;font-size:.8rem;font-weight:600;color:var(--muted);line-height:1.2}
 .seg input:checked+span{background:var(--ok);color:var(--surface)}
 .seg input:focus-visible+span{outline:2px solid var(--brass);outline-offset:1px}
+.warnt{color:var(--warn);font-weight:600}
+.pend{grid-column:1 / -1;font-size:.82rem;font-weight:600;color:var(--warn);min-width:0;overflow-wrap:anywhere}
+.pend.ok{color:var(--ok);font-weight:500}
+.notice.warn{border-style:solid;border-color:color-mix(in srgb, var(--warn) 55%, var(--line));color:var(--ink)}
+.notice.warn b{color:var(--warn)}
 .disp-tag{font-family:var(--body);font-weight:600;color:var(--ok);margin-right:4px}
 .row.out .who,.row.out .acct{opacity:.7}
 .row .val.muted{color:var(--muted)}
@@ -259,6 +264,7 @@ button.topadd{width:100%;text-align:left;color:var(--ink);font:inherit}
       <label class="readrec pick" id="recRead"><span id="recReadTxt">Ler comprovante de Pix recebido</span>
         <input type="file" id="fileRec" accept="image/*,application/pdf" multiple aria-label="Ler comprovante de recebimento"></label>
     </div>
+    <p class="notice warn" id="recPend" hidden></p>
     <p class="notice" id="recFora" hidden></p>
     <div id="recDays"></div>
   </div>
@@ -281,6 +287,7 @@ button.topadd{width:100%;text-align:left;color:var(--ink);font:inherit}
 <div class="toast" id="toast" hidden></div>
 <datalist id="cats"><option>Vendas na loja</option><option>Vendas no site</option><option>Vendas por WhatsApp</option><option>Atacado / revenda</option><option>Outras receitas</option></datalist>
 <datalist id="formas"><option>Pix</option><option>Cartão de crédito</option><option>Cartão de débito</option><option>Dinheiro</option><option>Boleto</option><option>Transferência</option></datalist>
+<datalist id="bancos"><option>Nubank</option><option>Itaú</option><option>Bradesco</option><option>Banco do Brasil</option><option>Caixa</option><option>Santander</option><option>Inter</option><option>Sicoob</option><option>Sicredi</option><option>C6</option><option>PicPay</option><option>Mercado Pago</option><option>Stone</option><option>PagBank</option><option>Dinheiro em caixa</option></datalist>
 <datalist id="tipos"><option>Pix</option><option>TED</option><option>DOC</option><option>Boleto</option><option>Transferência</option><option>Cartão</option></datalist>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -307,9 +314,11 @@ function contaTexto(c){
   if (c.agencia) p.push('Ag '+c.agencia);
   if (c.conta) p.push('CC '+c.conta);
   if (c.chavePix) p.push('Pix '+c.chavePix);
-  return p.join(' · ') || 'Conta não identificada';
+  const dest = p.join(' · ');
+  if (c.bancoOrigem) return 'de '+c.bancoOrigem+' → '+(dest||'destino não identificado');
+  return dest || 'Conta não identificada';
 }
-const blank = name => ({favorecido:'',documento:'',banco:'',agencia:'',conta:'',chavePix:'',data:todayISO(),vencimento:'',valor:0,tipo:'',pagador:'',idTransacao:'',comentario:'',confianca:'manual',arquivo:name});
+const blank = name => ({favorecido:'',documento:'',banco:'',agencia:'',conta:'',chavePix:'',data:todayISO(),vencimento:'',valor:0,tipo:'',pagador:'',bancoOrigem:'',idTransacao:'',comentario:'',confianca:'manual',arquivo:name});
 
 /* ---------- armazenamento no aparelho ---------- */
 const KEY='cc:comprovantes', CFG='cc:config';
@@ -389,7 +398,7 @@ const RKEY='cc:receitas';
 let recs = load(RKEY, []);
 const saveRecs = () => store(RKEY, recs);
 const sumV = arr => Math.round(arr.reduce((s,c)=>s+(Number(c.valor)||0),0)*100)/100;
-const blankRec = () => ({descricao:'',categoria:'',origem:'',forma:'Pix',valor:0,data:todayISO(),comentario:''});
+const blankRec = () => ({descricao:'',categoria:'',origem:'',forma:'Pix',banco:'',valor:0,data:todayISO(),comentario:'',pendente:0,pendenteDesc:'',regularizado:false,regularizadoEm:''});
 let tab = (()=>{ try{ return localStorage.getItem('cc:tab')||'desp'; }catch(e){ return 'desp'; } })();
 
 function setTab(t){
@@ -420,6 +429,9 @@ function renderRec(){
   $('#recBump').textContent = (lastRec!==null && total>lastRec) ? '+ R$ '+fmt(total-lastRec)+' agora' : (lastRec!==null && total!==lastRec ? '' : $('#recBump').textContent);
   lastRec = total;
   const fora = outros.reduce((s,r)=>s+alocacoes(r).filter(a=>a.mes!==cur).reduce((t,a)=>t+a.valor,0),0);
+  const abertas = recs.filter(pendAberto); const pendTot = sumV(abertas.map(r=>({valor:r.pendente})));
+  $('#recPend').hidden = !abertas.length;
+  $('#recPend').innerHTML = abertas.length ? `<b>${abertas.length===1?'1 pendência em aberto':abertas.length+' pendências em aberto'}</b> · falta receber <b class="num">R$ ${fmt(pendTot)}</b>. Toque na receita para marcar como regularizada.` : '';
   $('#recFora').hidden = !fora;
   $('#recFora').innerHTML = fora ? `Também entrou neste mês <b class="num">R$ ${fmt(fora)}</b> que conta em outros meses. Esses lançamentos aparecem em cinza na lista, com o mês em que contam.` : '';
   const box = $('#recDays');
@@ -444,9 +456,12 @@ function renderRec(){
         const info = r._out ? `<span class="disp-tag">para ${al.map(a=>mesCurto(a.mes)).join(', ')}</span>`
           : r._parc ? `<span class="disp-tag">parte ${r._parc} · total R$ ${fmt(r._full)}</span>`
           : r._antec ? `<span class="disp-tag">recebida em ${esc(brDate(r.data))}</span>` : '';
-        const sub=[r.categoria, r.origem].filter(Boolean).join(' · ');
+        const sub=[r.categoria, r.origem, r.banco?('em '+r.banco):''].filter(Boolean).join(' · ');
+        const pend = (Number(r.pendente)||0)>0 ? (r.regularizado
+          ? `<span class="pend ok">Pendência de R$ ${fmt(r.pendente)} regularizada${r.regularizadoEm?' em '+esc(brDate(r.regularizadoEm)):''}</span>`
+          : `<span class="pend">Pendente: R$ ${fmt(r.pendente)}${r.pendenteDesc?' · '+esc(r.pendenteDesc):''}</span>`) : '';
         const valor = r._out ? `<span class="val muted">R$ ${fmt(r.valor)}</span>` : `<span class="val pos">+ R$ ${fmt(r.valor)}</span>`;
-        return `<div class="row${r._out?' out':''}" data-id="${esc(r.id)}"><button class="rowmain"><span class="who">${r.forma?`<span class="tag rec">${esc(r.forma)}</span>`:''}${esc(r.descricao||r.categoria||'Receita')}</span>${valor}${(sub||info)?`<span class="acct">${info}${info&&sub?' ':''}${esc(sub)}</span>`:''}${r.comentario?`<span class="note">${esc(r.comentario)}</span>`:''}</button><button class="del" aria-label="Excluir receita" title="Excluir receita">${TRASH}</button></div>`; }).join('')
+        return `<div class="row${r._out?' out':''}" data-id="${esc(r.id)}"><button class="rowmain"><span class="who">${r.forma?`<span class="tag rec">${esc(r.forma)}</span>`:''}${esc(r.descricao||r.categoria||'Receita')}</span>${valor}${(sub||info)?`<span class="acct">${info}${info&&sub?' ':''}${esc(sub)}</span>`:''}${pend}${r.comentario?`<span class="note">${esc(r.comentario)}</span>`:''}</button><button class="del" aria-label="Excluir receita" title="Excluir receita">${TRASH}</button></div>`; }).join('')
     }</div></div>`;
   }).join('');
   box.querySelectorAll('.row').forEach(rw=>{
@@ -471,15 +486,20 @@ function recFields(r,k){
     <label class="f">Data<input id="rdt${k}" type="date" value="${esc(r.data||todayISO())}"></label>
     <label class="f">Categoria<input id="rct${k}" value="${esc(r.categoria)}" list="cats" placeholder="Vendas na loja"></label>
     <label class="f">Forma<input id="rfm${k}" value="${esc(r.forma)}" list="formas"></label>
+    <label class="f full">Banco de recebimento (entrou em)<input id="rbk${k}" value="${esc(r.banco||'')}" list="bancos" placeholder="Ex.: Nubank, Itaú, maquininha"></label>
     <label class="f full">Cliente / origem<input id="ror${k}" value="${esc(r.origem)}" placeholder="Opcional"></label>
     <label class="f full">Comentário<input id="rcm${k}" value="${esc(r.comentario||'')}" placeholder="Opcional"></label>
+    ${pendHTML(r,k)}
     ${dispHTML(r,k)}
   </div>`;
 }
 function readRec(k, base){
   const g=id=>($('#'+id+k)?.value||'').trim();
   const data=g('rdt')||todayISO();
-  const rec = {...base, descricao:g('rds'), valor:parseValor(g('rvl')), data, mes:monthOf(data), categoria:g('rct'), forma:g('rfm'), origem:g('ror'), comentario:g('rcm')};
+  const rec = {...base, descricao:g('rds'), valor:parseValor(g('rvl')), data, mes:monthOf(data), categoria:g('rct'), forma:g('rfm'), banco:g('rbk'), origem:g('ror'), comentario:g('rcm'),
+    pendente:parseValor(g('rpv')), pendenteDesc:g('rpd'), regularizado:!!$('#rpr'+k)?.checked, regularizadoEm:g('rpe')};
+  if (!rec.pendente){ rec.pendenteDesc=''; rec.regularizado=false; rec.regularizadoEm=''; }
+  if (!rec.regularizado) rec.regularizadoEm=''; else if (!rec.regularizadoEm) rec.regularizadoEm=todayISO();
   const al = readAloc(k, rec);
   if (al) rec.alocacao = al; else delete rec.alocacao;
   return rec;
@@ -490,7 +510,7 @@ function openRecSheet(list, editId){
     ${edit?'':'<p class="sub">Vendas, recebimentos de clientes e outras entradas de dinheiro.</p>'}
     ${list.map((r,k)=>`<div class="card" id="rcard${k}">${!edit&&multi?`<div class="head"><span>${esc(r.arquivo||'')}</span><label class="chk"><input type="checkbox" id="rinc${k}" checked> Somar</label></div>`:''}${recFields(r,k)}</div>`).join('')}
     <div class="actions">${edit?'<button class="btn danger" id="rdel">Excluir</button>':''}<button class="btn" id="cancel">${edit?'Fechar':'Descartar'}</button><button class="btn primary" id="rsave">${edit?'Salvar':'Salvar receita'}</button></div>`);
-  list.forEach((r,k)=>{ wireDisp(k); const cb=$('#rinc'+k); if (cb) cb.onchange=()=>$('#rcard'+k).classList.toggle('skip',!cb.checked); });
+  list.forEach((r,k)=>{ wireDisp(k); wirePend(k); const cb=$('#rinc'+k); if (cb) cb.onchange=()=>$('#rcard'+k).classList.toggle('skip',!cb.checked); });
   const inc = k => { const cb=$('#rinc'+k); return cb ? cb.checked : true; };
   $('#cancel').onclick=closeSheet;
   if (!edit) setTimeout(()=>{ const f=$('#rds0'); if (f && !list[0].descricao) f.focus(); }, 60);
@@ -526,12 +546,34 @@ async function handleRecFiles(files){
     const f=files[i]; txt.textContent=`Lendo ${i+1} de ${files.length}…`;
     try{
       const r=await readFile(f);
-      if (r.items.length) r.items.forEach(it=>out.push({descricao: it.tipo?'Recebimento por '+it.tipo:'Recebimento', categoria:'', origem: it.pagador||'', forma: it.tipo||'Pix', valor: it.valor, data: it.data||todayISO(), comentario:'', arquivo:f.name}));
+      if (r.items.length) r.items.forEach(it=>out.push({descricao: it.tipo?'Recebimento por '+it.tipo:'Recebimento', categoria:'', origem: it.pagador||'', forma: it.tipo||'Pix', banco: it.banco||'', valor: it.valor, data: it.data||todayISO(), comentario:'', arquivo:f.name}));
       else out.push({...blankRec(), arquivo:f.name});
     }catch(e){ out.push({...blankRec(), arquivo:f.name}); toast((e?.message||'Falha na leitura.')+' Preencha à mão.'); }
   }
   lbl.classList.remove('busy'); txt.textContent=old;
   openRecSheet(out);
+}
+
+/* ---------- valor pendente das receitas ---------- */
+const pendAberto = r => (Number(r.pendente)||0) > 0 && !r.regularizado;
+function pendHTML(r,k){
+  const has = (Number(r.pendente)||0) > 0;
+  return `<div class="disp full" id="pend${k}">
+    <span class="dl">Ficou algum valor pendente?</span>
+    <div class="grid">
+      <label class="f">Valor pendente (R$)<input id="rpv${k}" class="mono" inputmode="decimal" value="${has?esc(fmt(r.pendente)):''}" placeholder="0,00"></label>
+      <label class="f">O que está pendente<input id="rpd${k}" value="${esc(r.pendenteDesc||'')}" placeholder="Ex.: restante do pedido"></label>
+    </div>
+    <div class="grid" id="pendReg${k}" ${has?'':'hidden'}>
+      <label class="chk full"><input type="checkbox" id="rpr${k}" ${r.regularizado?'checked':''}> Já foi regularizado</label>
+      <label class="f full" id="pendDt${k}" ${r.regularizado?'':'hidden'}>Regularizado em<input id="rpe${k}" type="date" value="${esc(r.regularizadoEm||todayISO())}"></label>
+    </div>
+  </div>`;
+}
+function wirePend(k){
+  const v=$('#rpv'+k), r=$('#rpr'+k); if (!v || !r) return;
+  const upd=()=>{ const has=parseValor(v.value)>0; $('#pendReg'+k).hidden=!has; $('#pendDt'+k).hidden=!(has && r.checked); };
+  v.addEventListener('input',upd); r.addEventListener('change',upd); upd();
 }
 
 /* ---------- disponibilidade das receitas ---------- */
@@ -638,6 +680,7 @@ function renderDash(){
   const mItems=all.filter(x=>x.mes===cur), rItems=recPortions(cur);
   const series=[...Array(6)].map((_,i)=>{ const m=addMonths(cur,i-5); return {m,...monthTotals(m)}; });
   const empty = !r && !d;
+  const pendAb = sumV(recs.filter(pendAberto).map(x=>({valor:x.pendente})));
   const vsPrev = (prev.r||prev.d) ? `${s-ps>=0?'▲':'▼'} R$ ${fmt(Math.abs(s-ps))} em relação a ${shortMonth(addMonths(cur,-1))}` : '';
   $('#dash').innerHTML = `
     <section class="result ${s>=0?'pos':'neg'}">
@@ -646,7 +689,7 @@ function renderDash(){
       <div class="meta"><span class="verdict">${empty?'Sem lançamentos':(s>=0?'Sobrou dinheiro':'Gastou mais do que recebeu')}</span>${margem!==null?`<span>Margem ${margem}%</span>`:''}${vsPrev?`<span>${vsPrev}</span>`:''}</div>
     </section>
     <div class="kpis">
-      <button class="kpi" data-go="rec"><span class="lbl"><i class="sw rec"></i>Receitas</span><b class="num">R$ ${fmt(r)}</b><span class="track"><i class="rec" style="width:${r/mx*100}%"></i></span><span class="small">${rItems.length} ${rItems.length===1?'lançamento':'lançamentos'}</span></button>
+      <button class="kpi" data-go="rec"><span class="lbl"><i class="sw rec"></i>Receitas</span><b class="num">R$ ${fmt(r)}</b><span class="track"><i class="rec" style="width:${r/mx*100}%"></i></span><span class="small">${rItems.length} ${rItems.length===1?'lançamento':'lançamentos'}${pendAb>0?` · <span class="warnt">R$ ${fmt(pendAb)} a receber</span>`:''}</span></button>
       <button class="kpi" data-go="desp"><span class="lbl"><i class="sw desp"></i>Despesas</span><b class="num">R$ ${fmt(d)}</b><span class="track"><i class="desp" style="width:${d/mx*100}%"></i></span><span class="small">${mItems.length} ${mItems.length===1?'comprovante':'comprovantes'}</span></button>
     </div>
     <div class="panel"><div class="ph"><h3>Últimos 6 meses</h3><span class="legend"><span><i class="sw rec"></i>Receitas</span><span><i class="sw desp"></i>Despesas</span></span></div>${chartSVG(series)}<p class="small">Embaixo de cada mês: quanto sobrou (+) ou faltou (−), em mil reais.</p></div>
@@ -659,8 +702,8 @@ function renderDash(){
 const PROMPT = `Você lê comprovantes de pagamento brasileiros (Pix, TED, DOC, transferência, boleto, cartão).
 Extraia CADA pagamento presente (normalmente um só).
 Responda somente com JSON neste formato:
-{"comprovantes":[{"favorecido":"nome de quem recebeu","documento":"CPF/CNPJ do favorecido como aparece, ou null","banco":"banco/instituição de destino ou null","agencia":"agência de destino ou null","conta":"conta de destino ou null","chavePix":"chave Pix de destino ou null","data":"AAAA-MM-DD","vencimento":"AAAA-MM-DD ou null","valor":1234.56,"tipo":"Pix|TED|DOC|Boleto|Transferência|Cartão|Outro","pagador":"nome de quem pagou ou null","idTransacao":"ID/autenticação ou null","confianca":"alta|media|baixa"}]}
-Regras: valor em reais como número com ponto decimal (o valor efetivamente pago). data é a data em que o pagamento foi efetuado. vencimento é a data de vencimento da conta ou boleto, se aparecer (não confunda com a data do pagamento). Em boleto, o favorecido é o beneficiário/cedente. Não invente nada: use null para o que não estiver legível e marque confianca "baixa" se houver dúvida. Se não for um comprovante de pagamento, devolva {"comprovantes":[]}.`;
+{"comprovantes":[{"favorecido":"nome de quem recebeu","documento":"CPF/CNPJ do favorecido como aparece, ou null","banco":"banco/instituição de destino ou null","agencia":"agência de destino ou null","conta":"conta de destino ou null","chavePix":"chave Pix de destino ou null","data":"AAAA-MM-DD","vencimento":"AAAA-MM-DD ou null","valor":1234.56,"tipo":"Pix|TED|DOC|Boleto|Transferência|Cartão|Outro","pagador":"nome de quem pagou ou null","bancoOrigem":"banco/instituição de ORIGEM (de onde saiu o dinheiro, conta do pagador) ou null","idTransacao":"ID/autenticação ou null","confianca":"alta|media|baixa"}]}
+Regras: valor em reais como número com ponto decimal (o valor efetivamente pago). data é a data em que o pagamento foi efetuado. vencimento é a data de vencimento da conta ou boleto, se aparecer (não confunda com a data do pagamento). Em boleto, o favorecido é o beneficiário/cedente. banco é o banco de DESTINO (do favorecido); bancoOrigem é o banco de ORIGEM (do pagador), geralmente o banco que emitiu o comprovante. Não invente nada: use null para o que não estiver legível e marque confianca "baixa" se houver dúvida. Se não for um comprovante de pagamento, devolva {"comprovantes":[]}.`;
 
 function mapOut(out, name){
   const arr = Array.isArray(out?.comprovantes) ? out.comprovantes : (Array.isArray(out) ? out : (out && typeof out==='object' && 'valor' in out ? [out] : []));
@@ -668,7 +711,7 @@ function mapOut(out, name){
   return arr.map(c=>({
     favorecido: c.favorecido || '', documento: c.documento || '', banco: c.banco || '', agencia: c.agencia || '',
     conta: c.conta || '', chavePix: c.chavePix || '', data: okDate(c.data), vencimento: okDate(c.vencimento),
-    valor: parseValor(c.valor), tipo: c.tipo || '', pagador: c.pagador || '', idTransacao: c.idTransacao || '',
+    valor: parseValor(c.valor), tipo: c.tipo || '', pagador: c.pagador || '', bancoOrigem: c.bancoOrigem || '', idTransacao: c.idTransacao || '',
     comentario: '', confianca: c.confianca || 'media', arquivo: name
   }));
 }
@@ -842,7 +885,8 @@ function fieldsHTML(c, k){
     <label class="f">Data do pagamento<input id="dat${k}" type="date" value="${esc(c.data||todayISO())}"></label>
     <label class="f">Vencimento<input id="ven${k}" type="date" value="${esc(c.vencimento||'')}"></label>
     <label class="f">Tipo<input id="tip${k}" value="${esc(c.tipo)}" list="tipos"></label>
-    <label class="f full">Banco destino<input id="ban${k}" value="${esc(c.banco)}"></label>
+    <label class="f">Banco de origem (saiu de)<input id="bor${k}" value="${esc(c.bancoOrigem||'')}" list="bancos" placeholder="Ex.: Nubank"></label>
+    <label class="f">Banco destino (foi para)<input id="ban${k}" value="${esc(c.banco)}" list="bancos"></label>
     <label class="f">Agência<input id="age${k}" class="mono" value="${esc(c.agencia)}"></label>
     <label class="f">Conta<input id="con${k}" class="mono" value="${esc(c.conta)}"></label>
     <label class="f full">Chave Pix<input id="pix${k}" class="mono" value="${esc(c.chavePix)}"></label>
@@ -854,7 +898,7 @@ function readFields(k, base){
   const g=id=>($('#'+id+k)?.value||'').trim();
   const data = g('dat') || todayISO();
   return {...base, favorecido:g('fav'), comentario:g('com'), valor:parseValor(g('val')), data, mes:monthOf(data), vencimento:g('ven'),
-    banco:g('ban'), tipo:g('tip'), agencia:g('age'), conta:g('con'), chavePix:g('pix'), documento:g('doc'), idTransacao:g('idt')};
+    banco:g('ban'), tipo:g('tip'), agencia:g('age'), conta:g('con'), chavePix:g('pix'), documento:g('doc'), idTransacao:g('idt'), bancoOrigem:g('bor')};
 }
 function openSheet(html){ $('#sheet').innerHTML = html; $('#scrim').hidden=false; $('#sheet').scrollTop=0; }
 function closeSheet(){ $('#scrim').hidden=true; $('#sheet').innerHTML=''; }
@@ -932,18 +976,18 @@ async function giveFile(name, content, type){
 function csvMes(){
   const items = all.filter(c=>c.mes===cur).sort((a,b)=>(a.data||'').localeCompare(b.data||''));
   const q = v => '"'+String(v??'').replace(/"/g,'""')+'"';
-  const rows = [['Data pagamento','Vencimento','Favorecido','Comentário','CPF/CNPJ','Tipo','Banco','Agência','Conta','Chave Pix','Valor','ID transação','Arquivo']]
-    .concat(items.map(c=>[brDate(c.data),brDate(c.vencimento),c.favorecido,c.comentario,c.documento,c.tipo,c.banco,c.agencia,c.conta,c.chavePix,fmt(c.valor),c.idTransacao,c.arquivo]));
-  rows.push(['','','TOTAL','','','','','','','',fmt(items.reduce((s,c)=>s+(Number(c.valor)||0),0)),'','']);
+  const rows = [['Data pagamento','Vencimento','Favorecido','Comentário','CPF/CNPJ','Tipo','Banco de origem','Banco destino','Agência','Conta','Chave Pix','Valor','ID transação','Arquivo']]
+    .concat(items.map(c=>[brDate(c.data),brDate(c.vencimento),c.favorecido,c.comentario,c.documento,c.tipo,c.bancoOrigem,c.banco,c.agencia,c.conta,c.chavePix,fmt(c.valor),c.idTransacao,c.arquivo]));
+  rows.push(['','','TOTAL','','','','','','','','',fmt(items.reduce((s,c)=>s+(Number(c.valor)||0),0)),'','']);
   return '﻿'+rows.map(r=>r.map(q).join(';')).join('\r\n');
 }
 
 function csvRec(){
   const items = recPortions(cur).sort((a,b)=>(a.data||'').localeCompare(b.data||''));
   const q = v => '"'+String(v??'').replace(/"/g,'""')+'"';
-  const rows = [['Recebido em','Conta em','Parte','Descrição','Categoria','Forma','Cliente / origem','Comentário','Valor no mês','Valor total recebido']]
-    .concat(items.map(c=>[brDate(c.data),mesCurto(cur),c._parc,c.descricao,c.categoria,c.forma,c.origem,c.comentario,fmt(c.valor),fmt(c._full)]));
-  rows.push(['','','','TOTAL','','','','',fmt(sumV(items)),'']);
+  const rows = [['Recebido em','Conta em','Parte','Descrição','Categoria','Forma','Banco de recebimento','Cliente / origem','Comentário','Valor no mês','Valor total recebido','Valor pendente','Pendência','Regularizado','Regularizado em']]
+    .concat(items.map(c=>[brDate(c.data),mesCurto(cur),c._parc,c.descricao,c.categoria,c.forma,c.banco,c.origem,c.comentario,fmt(c.valor),fmt(c._full),(Number(c.pendente)||0)>0?fmt(c.pendente):'',c.pendenteDesc,(Number(c.pendente)||0)>0?(c.regularizado?'Sim':'Não'):'',brDate(c.regularizadoEm)]));
+  rows.push(['','','','TOTAL','','','','','',fmt(sumV(items)),'','','','','']);
   return '﻿'+rows.map(r=>r.map(q).join(';')).join('\r\n');
 }
 function openSettings(){
